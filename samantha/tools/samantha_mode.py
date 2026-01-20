@@ -51,7 +51,6 @@ KOKORO_URL = os.getenv("KOKORO_URL", "http://localhost:8880/v1/audio/speech")
 
 SAMANTHA_DIR = Path.home() / ".samantha"
 CONFIG_FILE = SAMANTHA_DIR / "config.json"
-TTS_QUEUE_FILE = SAMANTHA_DIR / "tts_queue.txt"
 SAMANTHA_ACTIVE_FILE = SAMANTHA_DIR / "samantha_active"
 CONVERSATION_LOG = SAMANTHA_DIR / "conversation.log"
 
@@ -139,8 +138,6 @@ WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
 SUPPORTED_APPS = ["Cursor", "Claude", "Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty"]
 
-_samantha_task: Optional[asyncio.Task] = None
-_stop_event: Optional[asyncio.Event] = None
 _samantha_thread = None
 _thread_stop_flag = False
 _thread_ready = None
@@ -224,16 +221,6 @@ def check_for_deactivation(text: str) -> bool:
     return any(phrase in text_clean for phrase in get_deactivation_phrases())
 
 
-def resample_audio(audio_data: np.ndarray, from_rate: int, to_rate: int) -> np.ndarray:
-    """Resample audio data from one sample rate to another using scipy (high quality)."""
-    if from_rate == to_rate:
-        return audio_data
-    from scipy import signal
-    new_length = int(len(audio_data) * to_rate / from_rate)
-    resampled = signal.resample(audio_data, new_length)
-    return resampled.astype(np.int16)
-
-
 def normalize_audio(audio_data: np.ndarray, target_peak: int = 20000) -> np.ndarray:
     """Normalize audio to target peak level for better recognition with low-sensitivity mics."""
     peak = max(abs(audio_data.min()), abs(audio_data.max()))
@@ -244,55 +231,6 @@ def normalize_audio(audio_data: np.ndarray, target_peak: int = 20000) -> np.ndar
         normalized = np.clip(audio_data.astype(np.float32) * gain, -32768, 32767).astype(np.int16)
         return normalized
     return audio_data
-
-
-def check_vad_speech(audio_data: np.ndarray, aggressiveness: int = 1) -> bool:
-    """Check if audio contains speech using WebRTC VAD.
-
-    Args:
-        audio_data: Audio samples at SAMPLE_RATE (24kHz), int16
-        aggressiveness: 0-3, higher = more strict (fewer false positives)
-
-    Returns:
-        True if speech detected, False otherwise
-    """
-    if not VAD_AVAILABLE:
-        return True
-
-    try:
-        vad = webrtcvad.Vad(aggressiveness)
-
-        # Normalize audio before VAD - MacBook mic has low sensitivity
-        audio_data = normalize_audio(audio_data, target_peak=15000)
-
-        # Resample to 16kHz for VAD (WebRTC VAD only supports 8k/16k/32k)
-        vad_audio = resample_audio(audio_data, SAMPLE_RATE, WHISPER_SAMPLE_RATE)
-
-        frame_duration_ms = 30
-        frame_size = int(WHISPER_SAMPLE_RATE * frame_duration_ms / 1000)
-
-        speech_frames = 0
-        total_frames = 0
-
-        for i in range(0, len(vad_audio) - frame_size, frame_size):
-            frame = vad_audio[i:i + frame_size]
-            frame_bytes = frame.tobytes()
-
-            try:
-                if vad.is_speech(frame_bytes, WHISPER_SAMPLE_RATE):
-                    speech_frames += 1
-            except Exception:
-                pass
-            total_frames += 1
-
-        if total_frames == 0:
-            return False
-
-        speech_ratio = speech_frames / total_frames
-        return speech_ratio > 0.1
-    except Exception as e:
-        logger.debug("VAD error: %s", e)
-        return True
 
 
 def _prepare_audio_for_whisper(audio_data: np.ndarray) -> io.BytesIO:
@@ -669,16 +607,12 @@ async def wait_for_response_and_speak(timeout: float = 30.0) -> bool:
         pass
 
     while time.time() - start_time < timeout:
-        # Check TTS queue file
-        if TTS_QUEUE_FILE.exists():
-            try:
-                tts_text = TTS_QUEUE_FILE.read_text().strip()
-                if tts_text:
-                    TTS_QUEUE_FILE.unlink()
-                    await speak_tts(tts_text)
-                    return True
-            except Exception:
-                pass
+        # Check in-memory TTS queue
+        with _tts_queue_lock:
+            if _tts_text_queue:
+                tts_text = _tts_text_queue.pop(0)
+                await speak_tts(tts_text)
+                return True
 
         # Monitor clipboard for response
         try:
@@ -873,28 +807,9 @@ def is_echo(text: str) -> bool:
     return False
 
 
-_tts_queue: asyncio.Queue = None
 _tts_playing = False
-_pending_voice_command = False
 _tts_start_time = 0
 _tts_interrupt = False
-
-
-async def tts_worker():
-    """Background worker that plays TTS sequentially from queue."""
-    global _tts_queue, _stop_event, _tts_playing
-    while not _stop_event.is_set():
-        try:
-            text = await asyncio.wait_for(_tts_queue.get(), timeout=0.5)
-            if text:
-                _tts_playing = True
-                speak_tts_sync(text)
-                _tts_playing = False
-        except asyncio.TimeoutError:
-            continue
-        except Exception as e:
-            _tts_playing = False
-            logger.error("TTS worker error: %s", e)
 
 
 def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
@@ -939,8 +854,9 @@ def samantha_loop_thread():
     from scipy import signal as scipy_signal
 
     VAD_CHUNK_DURATION_MS = 30
-    SILENCE_THRESHOLD_MS = 2000
+    SILENCE_THRESHOLD_MS = 1000
     MIN_RECORDING_DURATION = 0.3
+    INITIAL_SILENCE_GRACE_PERIOD = 1.0
     VAD_SAMPLE_RATE = 16000
     VAD_AGGRESSIVENESS = 1
 
@@ -975,19 +891,7 @@ def samantha_loop_thread():
 
             while not _thread_stop_flag:
                 try:
-                    # Check if we need to start TTS (runs in background thread)
-                    # First, check for new messages and add to queue
-                    if TTS_QUEUE_FILE.exists():
-                        try:
-                            tts_text = TTS_QUEUE_FILE.read_text().strip()
-                            TTS_QUEUE_FILE.unlink()
-                            if tts_text:
-                                with _tts_queue_lock:
-                                    _tts_text_queue.append(tts_text)
-                        except Exception as e:
-                            logger.error("TTS queue file error: %s", e)
-
-                    # Process queue if not currently playing
+                    # Process TTS queue if not currently playing
                     tts_text = None
                     if not _tts_playing:
                         with _tts_queue_lock:
@@ -1125,7 +1029,8 @@ def samantha_loop_thread():
                             silence_duration_ms += VAD_CHUNK_DURATION_MS
 
                             recording_duration = time.time() - recording_start
-                            if recording_duration >= MIN_RECORDING_DURATION and silence_duration_ms >= SILENCE_THRESHOLD_MS:
+                            past_grace_period = recording_duration >= INITIAL_SILENCE_GRACE_PERIOD
+                            if recording_duration >= MIN_RECORDING_DURATION and silence_duration_ms >= SILENCE_THRESHOLD_MS and past_grace_period:
                                 logger.info("✓ Silence threshold reached after %.1fs", recording_duration)
 
                                 # No timestamp-based discard - rely on is_echo() for text filtering
@@ -1361,7 +1266,10 @@ async def samantha_stop() -> str:
         _samantha_thread = None
 
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
-    TTS_QUEUE_FILE.unlink(missing_ok=True)
+
+    # Clear in-memory TTS queue
+    with _tts_queue_lock:
+        _tts_text_queue.clear()
 
     kill_orphaned_processes()
 
@@ -1419,10 +1327,20 @@ async def samantha_speak(text: str) -> str:
     try:
         _last_tts_text = text
 
-        # Write to TTS queue file - the listening thread will pick it up and set _tts_playing
-        TTS_QUEUE_FILE.write_text(text)
-
-        return f"🔊 Spoke: {text[:50]}..."
+        # Check if Samantha thread is running
+        if _samantha_thread and _samantha_thread.is_alive():
+            # Add to in-memory queue - the listening thread will pick it up
+            with _tts_queue_lock:
+                _tts_text_queue.append(text)
+            return f"🔊 Spoke: {text[:50]}..."
+        else:
+            # Samantha not running - speak directly
+            logger.info("Samantha not running, speaking directly")
+            success = speak_tts_sync(text)
+            if success:
+                return f"🔊 Spoke: {text[:50]}..."
+            else:
+                return "❌ TTS failed: Kokoro service may not be running"
     except Exception as e:
         return f"❌ TTS failed: {e}"
 
