@@ -86,7 +86,8 @@ def get_input_device():
     """Get configured input device, or system default."""
     val = get_config("input_device")
     if val is not None and val != "null":
-        return int(val) if val != -1 else None
+        int_val = int(val)
+        return int_val if int_val != -1 else None
     return None
 
 
@@ -94,7 +95,8 @@ def get_output_device():
     """Get configured output device, or system default."""
     val = get_config("output_device")
     if val is not None and val != "null":
-        return int(val) if val != -1 else None
+        int_val = int(val)
+        return int_val if int_val != -1 else None
     return None
 
 
