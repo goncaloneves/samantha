@@ -677,27 +677,32 @@ def is_skip_allowed() -> bool:
 
 
 def contains_interrupt_phrase(text: str) -> bool:
-    """Check if text is exactly an active interrupt word (standalone).
+    """Check if text contains an active interrupt word.
 
     Uses dynamic interrupt words based on current TTS text to avoid
-    the TTS triggering its own interrupt.
+    the TTS triggering its own interrupt. Expects pre-sanitized text.
     """
     if not text:
         return False
 
-    text_lower = text.lower().strip()
     active_words = get_active_interrupt_words()
-
-    return text_lower in active_words
+    for word in active_words:
+        if word in text.split():
+            return True
+    return False
 
 
 def contains_skip_phrase(text: str) -> bool:
-    """Check if text is exactly a skip word (standalone) to skip to next queued message."""
+    """Check if text contains a skip word. Expects pre-sanitized text."""
     if not text:
         return False
     if not is_skip_allowed():
         return False
-    return text.lower().strip() in SKIP_WORDS
+
+    for word in SKIP_WORDS:
+        if word in text.split():
+            return True
+    return False
 
 
 _last_tts_text = ""
@@ -945,7 +950,8 @@ def samantha_loop_thread():
                             tts_elapsed = time.time() - _tts_start_time if _tts_start_time > 0 else 0
                             if accumulated_duration_ms >= 300 and tts_elapsed >= 2.0:
                                 full_audio = np.concatenate(audio_chunks)
-                                text = transcribe_audio_sync(full_audio)
+                                raw_text = transcribe_audio_sync(full_audio)
+                                text = sanitize_whisper_text(raw_text) if raw_text else ""
                                 logger.info("🔍 TTS interrupt check: %s", text[:50] if text else "None")
 
                                 if text and (contains_interrupt_phrase(text) or contains_skip_phrase(text)):
