@@ -118,8 +118,8 @@ DEFAULT_DEACTIVATION_PHRASES = [
     'samantha pause', 'pause samantha',
 ]
 
-INTERRUPT_WORDS = ['stop', 'quiet']
-SKIP_WORDS = ['next', 'skip']
+INTERRUPT_WORDS = ['stop', 'quiet', 'enough', 'halt']
+SKIP_WORDS = ['continue', 'skip']
 
 # Whisper bracketed/parenthesized sound patterns (regex will strip these)
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
@@ -831,7 +831,7 @@ def samantha_loop_thread():
     INITIAL_SILENCE_GRACE_PERIOD = 1.0
     VAD_SAMPLE_RATE = 16000
     VAD_AGGRESSIVENESS_LISTENING = 2  # More aggressive filtering when waiting for speech
-    VAD_AGGRESSIVENESS_TTS = 1  # Less aggressive during TTS to catch interrupts
+    VAD_AGGRESSIVENESS_TTS = 2  # Same aggressiveness during TTS to filter speaker bleed
 
     chunk_samples = int(SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
     vad_chunk_samples = int(VAD_SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
@@ -889,7 +889,9 @@ def samantha_loop_thread():
                         tts_text_to_speak = tts_text
 
                         def tts_thread_func():
-                            global _tts_playing, _last_tts_time, _tts_start_time
+                            global _tts_playing, _last_tts_time, _tts_start_time, _last_tts_text
+                            # Set TTS text BEFORE calculating active words
+                            _last_tts_text = tts_text_to_speak
                             active_words = get_active_interrupt_words()
                             logger.info("🎯 Active interrupt words: %s", active_words)
                             try:
@@ -933,11 +935,17 @@ def samantha_loop_thread():
                                 full_audio = np.concatenate(audio_chunks)
                                 raw_text = transcribe_audio_sync(full_audio)
                                 text = sanitize_whisper_text(raw_text) if raw_text else ""
-                                logger.info("🔍 TTS interrupt check: %s", text[:50] if text else "None")
 
-                                if text and (contains_interrupt_phrase(text) or contains_skip_phrase(text)):
-                                    is_skip = contains_skip_phrase(text) and not contains_interrupt_phrase(text)
-                                    if is_skip:
+                                # During TTS, ONLY check for interrupt/skip keywords
+                                # Ignore all other Whisper output (likely hallucinations from speaker bleed)
+                                is_interrupt = text and contains_interrupt_phrase(text)
+                                is_skip = text and contains_skip_phrase(text)
+
+                                if is_interrupt or is_skip:
+                                    # Interrupt takes priority over skip
+                                    is_skip_only = is_skip and not is_interrupt
+                                    logger.info("🔍 TTS interrupt check: %s", text[:50])
+                                    if is_skip_only:
                                         logger.info("⏭️ Skip to next detected: %s", text[:50])
                                         log_conversation("SKIP", text)
                                     else:
@@ -951,7 +959,7 @@ def samantha_loop_thread():
                                     time.sleep(0.1)
                                     _clear_queue(audio_queue)
                                     if get_show_status():
-                                        if is_skip:
+                                        if is_skip_only:
                                             inject_into_app("<!-- ⏭️ [Skipped to next] -->")
                                         else:
                                             inject_into_app("<!-- 🤫 [Speech interrupted] -->")
@@ -965,12 +973,16 @@ def samantha_loop_thread():
                             pass
                         continue  # Skip normal audio processing while TTS is playing
 
-                    # Post-TTS cleanup: clear audio queue and reset state
-                    if _last_tts_time > 0 and time.time() - _last_tts_time < 0.2:
+                    # Post-TTS cleanup: clear everything when TTS just finished
+                    # This ensures no hallucinations from TTS bleed leak into normal listening
+                    if _last_tts_time > 0:
+                        logger.debug("🧹 Post-TTS cleanup: clearing audio queue and buffers")
                         _clear_queue(audio_queue)
                         speech_detected = False
                         audio_chunks = []
                         silence_duration_ms = 0
+                        recording_start = 0
+                        _last_tts_time = 0  # Reset so cleanup only happens once
                         if is_active:
                             last_speech_time = time.time()
                         continue
