@@ -67,14 +67,16 @@ claude mcp add samantha -- samantha
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
 | 3. **Converse** | All speech is sent to Claude until deactivated |
 | 4. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" |
-| 5. **Interrupt** | Say "stop" or "quiet" during TTS to stop playback |
+| 5. **Skip** | Say "next" during TTS to skip to the next queued message |
+| 6. **Interrupt** | Say "stop" or "quiet" during TTS to clear the queue |
 
 ## 🎯 Usage
 
 ```
 /samantha:start          # Start voice mode
 "Hey Samantha, ..."      # Activate and speak
-"stop" / "quiet"         # Interrupt TTS
+"next"                   # Skip to next message in queue
+"stop" / "quiet"         # Interrupt TTS and clear queue
 "Samantha sleep"         # Deactivate (go idle)
 /samantha:stop           # Stop voice mode completely
 ```

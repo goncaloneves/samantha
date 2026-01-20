@@ -73,7 +73,8 @@ uv run samantha            # Run MCP server
 1. **Idle** → User says "Hey Samantha" → **Active** (plays activation chime)
 2. **Active** → All speech sent to Claude with 🎤 prefix
 3. **Active** → User says "Samantha sleep" → **Idle** (plays deactivation chime)
-4. **During TTS** → User says "stop" or "quiet" → TTS interrupted
+4. **During TTS** → User says "next" → Skip to next queued message
+5. **During TTS** → User says "stop" or "quiet" → TTS interrupted and queue cleared
 
 ## Configuration
 

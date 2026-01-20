@@ -764,6 +764,13 @@ def contains_interrupt_phrase(text: str) -> bool:
     return False
 
 
+def contains_skip_phrase(text: str) -> bool:
+    """Check if text contains 'next' to skip to next queued message."""
+    if not text:
+        return False
+    return 'next' in text.lower()
+
+
 _last_tts_text = ""
 _last_tts_time = 0
 
@@ -1000,14 +1007,19 @@ def samantha_loop_thread():
                                 text = transcribe_audio_sync(full_audio)
                                 logger.info("🔍 TTS interrupt check: %s", text[:50] if text else "None")
 
-                                if text and contains_interrupt_phrase(text):
-                                    logger.info("🛑 Interrupt detected: %s", text[:50])
-                                    log_conversation("INTERRUPT", text)
+                                if text and (contains_interrupt_phrase(text) or contains_skip_phrase(text)):
+                                    is_skip = contains_skip_phrase(text) and not contains_interrupt_phrase(text)
+                                    if is_skip:
+                                        logger.info("⏭️ Skip to next detected: %s", text[:50])
+                                        log_conversation("SKIP", text)
+                                    else:
+                                        logger.info("🛑 Interrupt detected: %s", text[:50])
+                                        log_conversation("INTERRUPT", text)
+                                        # Clear the TTS queue on full interrupt (stop/quiet)
+                                        with _tts_queue_lock:
+                                            _tts_text_queue.clear()
                                     _tts_interrupt = True
                                     _tts_playing = False
-                                    # Clear the TTS queue on user interrupt
-                                    with _tts_queue_lock:
-                                        _tts_text_queue.clear()
                                     time.sleep(0.1)
                                     while not audio_queue.empty():
                                         try:
@@ -1015,7 +1027,10 @@ def samantha_loop_thread():
                                         except queue.Empty:
                                             break
                                     if get_show_status():
-                                        inject_into_app("<!-- 🤫 [Speech interrupted] -->")
+                                        if is_skip:
+                                            inject_into_app("<!-- ⏭️ [Skipped to next] -->")
+                                        else:
+                                            inject_into_app("<!-- 🤫 [Speech interrupted] -->")
                                     if is_active:
                                         last_speech_time = time.time()
 
@@ -1304,9 +1319,13 @@ async def samantha_start() -> str:
     _samantha_thread = threading.Thread(target=samantha_loop_thread, daemon=True)
     _samantha_thread.start()
 
-    _thread_ready.wait(timeout=30.0)
+    ready = _thread_ready.wait(timeout=30.0)
 
-    return "🎧 Samantha started. Say 'Hey Samantha' to activate. Say 'Samantha sleep' to deactivate. Say 'stop' or 'quiet' to interrupt TTS."
+    if not ready:
+        _thread_stop_flag = True
+        return "❌ Samantha failed to start - audio stream not ready after 30 seconds. Please try again."
+
+    return "🎧 Samantha started. Say 'Hey Samantha' to activate. Say 'Samantha sleep' to deactivate. Say 'next' to skip to the next message, or 'stop'/'quiet' to clear the queue."
 
 
 @mcp.tool()
@@ -1354,7 +1373,7 @@ def get_persona() -> str:
 
 
 @mcp.tool()
-async def samantha_speak(text: str, include_persona: bool = True) -> str:
+async def samantha_speak(text: str) -> str:
     """Speak text via Samantha TTS.
 
     IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
@@ -1362,10 +1381,9 @@ async def samantha_speak(text: str, include_persona: bool = True) -> str:
 
     Args:
         text: Text to speak
-        include_persona: Whether to include persona guidelines in response (default True)
 
     Returns:
-        Status message with persona reminder
+        Status message
     """
     global _last_tts_text, _last_tts_time
     try:
@@ -1374,16 +1392,7 @@ async def samantha_speak(text: str, include_persona: bool = True) -> str:
         # Write to TTS queue file - the listening thread will pick it up and set _tts_playing
         TTS_QUEUE_FILE.write_text(text)
 
-        result = f"🔊 Spoke: {text[:50]}..."
-
-        if include_persona:
-            persona = get_persona()
-            if persona:
-                # Compact single-line reminder - include full persona
-                compact = ' '.join(persona.replace('\n', ' ').replace('  ', ' ').split())
-                result += f" | Persona: {compact}"
-
-        return result
+        return f"🔊 Spoke: {text[:50]}..."
     except Exception as e:
         return f"❌ TTS failed: {e}"
 
