@@ -590,68 +590,6 @@ def inject_into_app(text: str, log_type: str = None):
         logger.error("Injection failed on %s", PLATFORM)
 
 
-async def record_command(max_duration: float = 60.0, silence_threshold: float = 3.0, min_recording: float = 2.0) -> Optional[str]:
-    """Record user's voice command after wake word."""
-    logger.info("🎙️ Recording...")
-
-    chunk_duration = 1.0
-    chunk_samples = int(SAMPLE_RATE * chunk_duration)
-    audio_chunks = []
-    start_time = time.time()
-    last_speech_time = time.time()
-    full_transcription = ""
-    consecutive_silence = 0
-
-    while True:
-        elapsed = time.time() - start_time
-        if elapsed >= max_duration:
-            logger.info("Max duration reached")
-            break
-
-        recording = sd.rec(chunk_samples, samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=np.int16, device=get_input_device())
-        sd.wait()
-        audio_chunk = recording.flatten()
-
-        has_speech = check_vad_speech(audio_chunk, aggressiveness=1)
-
-        audio_chunks.append(audio_chunk)
-
-        if has_speech:
-            consecutive_silence = 0
-            last_speech_time = time.time()
-        else:
-            consecutive_silence += 1
-            logger.debug("🔇 Silence chunk %d/%d", consecutive_silence, int(silence_threshold / chunk_duration))
-
-            if elapsed > min_recording and consecutive_silence >= int(silence_threshold / chunk_duration):
-                logger.info("Silence detected after %.1fs (VAD)", elapsed)
-                break
-
-        if len(audio_chunks) >= 2:
-            full_audio = np.concatenate(audio_chunks)
-            text = await transcribe_audio(full_audio)
-
-            if text and text not in ["[BLANK_AUDIO]", ""]:
-                full_transcription = text
-                logger.debug("📝 Current: %s", text[:80])
-
-                if check_for_stop_phrase(text):
-                    logger.info("Stop phrase detected in: %s", text[:80])
-                    full_transcription = text
-                    break
-
-    # Final transcription of ALL audio to catch any last words
-    if audio_chunks:
-        full_audio = np.concatenate(audio_chunks)
-        final_text = await transcribe_audio(full_audio)
-        if final_text and final_text not in ["[BLANK_AUDIO]", ""] and len(final_text) >= len(full_transcription):
-            full_transcription = final_text
-            logger.info("📝 Final transcription updated: %s", full_transcription[:100])
-
-    logger.info("📝 Final: %s", full_transcription[:100] if full_transcription else "None")
-    return full_transcription if full_transcription else None
-
-
 def clean_command(text: str) -> str:
     """Clean recorded command text. Removes anything AFTER stop phrases (keeps the stop phrase)."""
     cleaned = re.sub(r'\[[^\]]*\]', '', text).strip()
