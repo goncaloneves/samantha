@@ -113,7 +113,7 @@ Create `~/.samantha/config.json` for easy customization:
 
 ```json
 {
-  "voice": "af_sky",
+  "voice": "af_aoede",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha", "sam bye"],
   "show_status": true,
