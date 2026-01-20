@@ -122,6 +122,21 @@ DEFAULT_DEACTIVATION_PHRASES = [
 INTERRUPT_WORDS = ['stop', 'quiet']
 SKIP_WORDS = ['next', 'skip']
 
+# Whisper hallucination patterns - from training on subtitle data
+WHISPER_HALLUCINATIONS = [
+    # Subtitle credits
+    'thank you for watching', 'thanks for watching', 'please subscribe',
+    'like and subscribe', 'subtitles by', 'amara.org', 'amara org',
+    'transcription by', 'transcript by', 'captions by',
+    # Foreign subtitle credits
+    'untertitel', 'sous-titres', 'sottotitoli', 'legendas',
+    # Common false positives on silence
+    'you', 'the', 'so', 'oh', 'okay', 'bye', 'hmm',
+]
+
+# Whisper bracketed/parenthesized sound patterns (regex will strip these)
+WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
+
 SUPPORTED_APPS = ["Cursor", "Claude", "Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty"]
 
 _samantha_task: Optional[asyncio.Task] = None
@@ -628,8 +643,9 @@ def inject_into_app(text: str, log_type: str = None):
 
 
 def clean_command(text: str) -> str:
-    """Clean recorded command text. Removes anything AFTER stop phrases (keeps the stop phrase)."""
-    cleaned = re.sub(r'\[[^\]]*\]', '', text).strip()
+    """Clean recorded command text. Removes Whisper metadata and anything AFTER stop phrases."""
+    # Remove Whisper sound annotations: [Music], (coughing), ♪, etc.
+    cleaned = WHISPER_SOUND_PATTERN.sub('', text).strip()
 
     stop_phrases_pattern = r'(stop\s+recording|end\s+recording|finish\s+recording|that\s+is\s+all|that\'s\s+all|thats\s+all|over\s+and\s+out|over\s+out|send\s+message|send\s+it|samantha\s+stop|samantha\s+send|samantha\s+done)'
     match = re.search(stop_phrases_pattern, cleaned, flags=re.IGNORECASE)
@@ -754,34 +770,79 @@ _last_tts_text = ""
 _last_tts_time = 0
 
 
+def sanitize_whisper_text(text: str) -> str:
+    """Clean Whisper transcription by removing metadata and hallucinations.
+
+    Removes:
+    - Bracketed sounds: [Music], [Applause], [BLANK_AUDIO], etc.
+    - Parenthesized sounds: (coughing), (laughing), etc.
+    - Musical notes: ♪♪♪
+    - Extra whitespace and special punctuation
+
+    Returns the cleaned dialogue text.
+    """
+    if not text:
+        return ""
+
+    # Remove bracketed/parenthesized sounds and musical notes
+    cleaned = WHISPER_SOUND_PATTERN.sub('', text)
+
+    # Remove special punctuation but keep apostrophes for contractions
+    cleaned = re.sub(r"[^\w\s']", '', cleaned)
+
+    # Collapse whitespace and strip
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip().lower()
+
+    return cleaned
+
+
+def is_hallucination(text: str) -> bool:
+    """Check if cleaned text is a known Whisper hallucination."""
+    if not text:
+        return True
+
+    # Exact match hallucinations
+    if text in WHISPER_HALLUCINATIONS:
+        return True
+
+    # Partial match for subtitle credits
+    for pattern in ['subtitles by', 'transcription by', 'captions by', 'amara']:
+        if pattern in text:
+            return True
+
+    return False
+
+
 def is_noise(text: str) -> bool:
     """Check if transcription is just background noise, not speech."""
     if not text:
         return True
 
-    # Sanitize: remove special chars, collapse whitespace, lowercase
-    sanitized = re.sub(r'[^\w\s]', '', text.lower())
-    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+    # Sanitize Whisper output
+    sanitized = sanitize_whisper_text(text)
 
     if not sanitized or len(sanitized) < 3:
         return True
 
-    # If contains any keyword, it's NOT noise
+    # If contains any keyword, it's NOT noise (priority check)
     all_keywords = DEFAULT_WAKE_WORDS + STOP_PHRASES + DEFAULT_DEACTIVATION_PHRASES + INTERRUPT_WORDS + SKIP_WORDS
     for keyword in all_keywords:
         if keyword in sanitized:
             return False
 
-    # Check if it's only noise words
+    # Check for Whisper hallucinations
+    if is_hallucination(sanitized):
+        return True
+
+    # Check if it's only noise descriptor words
     noise_words = [
         'click', 'clap', 'ding', 'bell', 'tick', 'thud', 'bang',
         'engine', 'revving', 'keyboard', 'typing', 'noise',
         'blank audio', 'silence', 'static', 'hum', 'buzz',
-        'music', 'music playing', 'pause', 'clock ticking'
+        'music', 'music playing', 'clock ticking'
     ]
-    for noise in noise_words:
-        if sanitized == noise:
-            return True
+    if sanitized in noise_words:
+        return True
 
     return False
 
