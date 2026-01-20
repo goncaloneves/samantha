@@ -119,6 +119,9 @@ DEFAULT_DEACTIVATION_PHRASES = [
     'samantha pause', 'pause samantha',
 ]
 
+INTERRUPT_WORDS = ['stop', 'quiet']
+SKIP_WORDS = ['next', 'skip']
+
 SUPPORTED_APPS = ["Cursor", "Claude", "Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty"]
 
 _samantha_task: Optional[asyncio.Task] = None
@@ -277,21 +280,37 @@ def check_vad_speech(audio_data: np.ndarray, aggressiveness: int = 1) -> bool:
         return True
 
 
+def _prepare_audio_for_whisper(audio_data: np.ndarray) -> io.BytesIO:
+    """Convert audio data to WAV buffer for Whisper STT."""
+    from pydub import AudioSegment
+    audio = AudioSegment(
+        audio_data.tobytes(),
+        frame_rate=SAMPLE_RATE,
+        sample_width=2,
+        channels=CHANNELS
+    )
+    if SAMPLE_RATE != WHISPER_SAMPLE_RATE:
+        audio = audio.set_frame_rate(WHISPER_SAMPLE_RATE)
+    wav_buffer = io.BytesIO()
+    audio.export(wav_buffer, format="wav")
+    wav_buffer.seek(0)
+    return wav_buffer
+
+
+def _clear_queue(q) -> None:
+    """Clear all items from a queue."""
+    import queue
+    while not q.empty():
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            break
+
+
 async def transcribe_audio(audio_data: np.ndarray) -> Optional[str]:
     """Transcribe audio using Whisper STT."""
     try:
-        from pydub import AudioSegment
-        audio = AudioSegment(
-            audio_data.tobytes(),
-            frame_rate=SAMPLE_RATE,
-            sample_width=2,
-            channels=CHANNELS
-        )
-        if SAMPLE_RATE != WHISPER_SAMPLE_RATE:
-            audio = audio.set_frame_rate(WHISPER_SAMPLE_RATE)
-        wav_buffer = io.BytesIO()
-        audio.export(wav_buffer, format="wav")
-        wav_buffer.seek(0)
+        wav_buffer = _prepare_audio_for_whisper(audio_data)
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
@@ -568,6 +587,24 @@ def activate_app(app_name: str) -> bool:
         return False
 
 
+def kill_orphaned_processes():
+    """Kill any orphaned samantha processes from previous sessions."""
+    try:
+        our_pid = os.getpid()
+        result = subprocess.run(["pgrep", "-f", "samantha"], capture_output=True, text=True, timeout=5)
+        if result.stdout.strip():
+            for pid in result.stdout.strip().split('\n'):
+                pid = int(pid.strip())
+                if pid != our_pid:
+                    try:
+                        os.kill(pid, 9)
+                        logger.info("Killed orphaned samantha process: %d", pid)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+    except Exception as e:
+        logger.debug("Cleanup check failed: %s", e)
+
+
 def inject_into_app(text: str, log_type: str = None):
     """Inject text into Cursor/terminal using clipboard paste (cross-platform)."""
     target = os.getenv("SAMANTHA_TARGET_APP") or get_frontmost_app()
@@ -674,24 +711,19 @@ def get_active_interrupt_words() -> list:
     global _last_tts_text
     tts_lower = _last_tts_text.lower() if _last_tts_text else ""
 
-    interrupt_words = []
-    if 'stop' not in tts_lower:
-        interrupt_words.append('stop')
-    if 'quiet' not in tts_lower:
-        interrupt_words.append('quiet')
-
-    return interrupt_words
+    return [word for word in INTERRUPT_WORDS if word not in tts_lower]
 
 
 def is_skip_allowed() -> bool:
-    """Check if 'next' skip is allowed based on current TTS text.
+    """Check if skip words are allowed based on current TTS text.
 
-    If TTS says "next", don't allow skip detection to avoid self-triggering.
+    If TTS contains a skip word, don't allow skip detection to avoid self-triggering.
     """
     global _last_tts_text
     if not _last_tts_text:
         return True
-    return 'next' not in _last_tts_text.lower()
+    tts_lower = _last_tts_text.lower()
+    return not any(word in tts_lower for word in SKIP_WORDS)
 
 
 def contains_interrupt_phrase(text: str) -> bool:
@@ -710,12 +742,12 @@ def contains_interrupt_phrase(text: str) -> bool:
 
 
 def contains_skip_phrase(text: str) -> bool:
-    """Check if text is exactly 'next' (standalone) to skip to next queued message."""
+    """Check if text is exactly a skip word (standalone) to skip to next queued message."""
     if not text:
         return False
     if not is_skip_allowed():
         return False
-    return text.lower().strip() == 'next'
+    return text.lower().strip() in SKIP_WORDS
 
 
 _last_tts_text = ""
@@ -726,18 +758,31 @@ def is_noise(text: str) -> bool:
     """Check if transcription is just background noise, not speech."""
     if not text:
         return True
-    text_lower = text.lower().strip()
-    noise_patterns = [
-        "(", ")", "[", "]",
-        "click", "clap", "ding", "bell", "tick", "thud", "bang",
-        "engine", "revving", "keyboard", "typing", "noise",
-        "blank_audio", "silence", "static", "hum", "buzz"
-    ]
-    for pattern in noise_patterns:
-        if pattern in text_lower:
-            return True
-    if len(text_lower) < 3:
+
+    # Sanitize: remove special chars, collapse whitespace, lowercase
+    sanitized = re.sub(r'[^\w\s]', '', text.lower())
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+
+    if not sanitized or len(sanitized) < 3:
         return True
+
+    # If contains any keyword, it's NOT noise
+    all_keywords = DEFAULT_WAKE_WORDS + STOP_PHRASES + DEFAULT_DEACTIVATION_PHRASES + INTERRUPT_WORDS + SKIP_WORDS
+    for keyword in all_keywords:
+        if keyword in sanitized:
+            return False
+
+    # Check if it's only noise words
+    noise_words = [
+        'click', 'clap', 'ding', 'bell', 'tick', 'thud', 'bang',
+        'engine', 'revving', 'keyboard', 'typing', 'noise',
+        'blank audio', 'silence', 'static', 'hum', 'buzz',
+        'music', 'music playing', 'pause', 'clock ticking'
+    ]
+    for noise in noise_words:
+        if sanitized == noise:
+            return True
+
     return False
 
 
@@ -794,22 +839,10 @@ async def tts_worker():
 def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
     """Synchronous transcribe for use in thread."""
     try:
-        from pydub import AudioSegment
         import requests
 
         audio_data = normalize_audio(audio_data)
-
-        audio = AudioSegment(
-            audio_data.tobytes(),
-            frame_rate=SAMPLE_RATE,
-            sample_width=2,
-            channels=CHANNELS
-        )
-        if SAMPLE_RATE != WHISPER_SAMPLE_RATE:
-            audio = audio.set_frame_rate(WHISPER_SAMPLE_RATE)
-        wav_buffer = io.BytesIO()
-        audio.export(wav_buffer, format="wav")
-        wav_buffer.seek(0)
+        wav_buffer = _prepare_audio_for_whisper(audio_data)
 
         response = requests.post(
             WHISPER_URL,
@@ -845,7 +878,7 @@ def samantha_loop_thread():
     from scipy import signal as scipy_signal
 
     VAD_CHUNK_DURATION_MS = 30
-    SILENCE_THRESHOLD_MS = 3000
+    SILENCE_THRESHOLD_MS = 2000
     MIN_RECORDING_DURATION = 0.3
     VAD_SAMPLE_RATE = 16000
     VAD_AGGRESSIVENESS = 1
@@ -907,11 +940,7 @@ def samantha_loop_thread():
                         _tts_done_event = threading.Event()
 
                         # Clear any accumulated audio before TTS
-                        while not audio_queue.empty():
-                            try:
-                                audio_queue.get_nowait()
-                            except queue.Empty:
-                                break
+                        _clear_queue(audio_queue)
                         speech_detected = False
                         audio_chunks = []
                         silence_duration_ms = 0
@@ -968,11 +997,7 @@ def samantha_loop_thread():
                                     _tts_interrupt = True
                                     _tts_playing = False
                                     time.sleep(0.1)
-                                    while not audio_queue.empty():
-                                        try:
-                                            audio_queue.get_nowait()
-                                        except queue.Empty:
-                                            break
+                                    _clear_queue(audio_queue)
                                     if get_show_status():
                                         if is_skip:
                                             inject_into_app("<!-- ⏭️ [Skipped to next] -->")
@@ -990,11 +1015,7 @@ def samantha_loop_thread():
 
                     # Post-TTS cleanup: clear audio queue and reset state
                     if _last_tts_time > 0 and time.time() - _last_tts_time < 0.2:
-                        while not audio_queue.empty():
-                            try:
-                                audio_queue.get_nowait()
-                            except queue.Empty:
-                                break
+                        _clear_queue(audio_queue)
                         speech_detected = False
                         audio_chunks = []
                         silence_duration_ms = 0
@@ -1106,23 +1127,38 @@ def samantha_loop_thread():
     logger.info("🛑 Samantha thread stopped")
 
 
+async def _check_service_health(health_url: str) -> bool:
+    """Check if a service is healthy."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(health_url)
+            return response.status_code == 200
+    except Exception:
+        return False
+
+
+async def _wait_for_service(health_url: str, service_name: str, max_attempts: int, log_interval: int) -> bool:
+    """Wait for a service to become healthy."""
+    for i in range(max_attempts):
+        await asyncio.sleep(1)
+        if await _check_service_health(health_url):
+            logger.info("%s started successfully", service_name)
+            return True
+        if i % log_interval == log_interval - 1:
+            logger.info("Waiting for %s... (%ds)", service_name, i + 1)
+    return False
+
+
 async def ensure_kokoro_running() -> bool:
     """Check if Kokoro TTS is running, attempt to start if not."""
     health_url = "http://localhost:8880/health"
 
-    # Check if already running
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(health_url)
-            if response.status_code == 200:
-                logger.info("Kokoro TTS is running")
-                return True
-    except Exception:
-        pass
+    if await _check_service_health(health_url):
+        logger.info("Kokoro TTS is running")
+        return True
 
     logger.info("Kokoro TTS not running, attempting to start...")
 
-    # Try to start
     kokoro_dir = SAMANTHA_DIR / "services" / "kokoro"
     system = platform.system()
     started = False
@@ -1154,19 +1190,8 @@ async def ensure_kokoro_running() -> bool:
         logger.error("Kokoro start script not found at %s", start_script)
         logger.error("Run 'samantha-install install' to install Kokoro")
 
-    # Wait for service to be ready (Kokoro takes longer to load models)
-    for i in range(45):
-        await asyncio.sleep(1)
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.get(health_url)
-                if response.status_code == 200:
-                    logger.info("Kokoro TTS started successfully")
-                    return True
-        except Exception:
-            pass
-        if i % 10 == 9:
-            logger.info("Waiting for Kokoro TTS... (%ds)", i + 1)
+    if await _wait_for_service(health_url, "Kokoro TTS", 45, 10):
+        return True
 
     logger.error("Failed to start Kokoro TTS - please start manually:")
     logger.error("  cd ~/.samantha/services/kokoro && ./%s", start_script.name if start_script else "start-gpu_mac.sh")
@@ -1177,19 +1202,12 @@ async def ensure_whisper_running() -> bool:
     """Check if Whisper STT is running, attempt to start if not."""
     health_url = "http://localhost:2022/health"
 
-    # Check if already running
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(health_url)
-            if response.status_code == 200:
-                logger.info("Whisper STT is running")
-                return True
-    except Exception:
-        pass
+    if await _check_service_health(health_url):
+        logger.info("Whisper STT is running")
+        return True
 
     logger.info("Whisper STT not running, attempting to start...")
 
-    # Try to start on macOS
     if platform.system() == "Darwin":
         started = False
         start_script = SAMANTHA_DIR / "services" / "whisper" / "bin" / "start-whisper-server.sh"
@@ -1210,19 +1228,8 @@ async def ensure_whisper_running() -> bool:
             logger.error("Whisper start script not found at %s", start_script)
             logger.error("Run 'samantha-install install' to install Whisper")
 
-    # Wait for service to be ready
-    for i in range(20):
-        await asyncio.sleep(1)
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.get(health_url)
-                if response.status_code == 200:
-                    logger.info("Whisper STT started successfully")
-                    return True
-        except Exception:
-            pass
-        if i % 5 == 4:
-            logger.info("Waiting for Whisper STT... (%ds)", i + 1)
+    if await _wait_for_service(health_url, "Whisper STT", 20, 5):
+        return True
 
     logger.error("Failed to start Whisper STT - please start manually:")
     logger.error("  ~/.samantha/services/whisper/bin/start-whisper-server.sh")
@@ -1249,6 +1256,8 @@ async def samantha_start() -> str:
 
     if _samantha_thread and _samantha_thread.is_alive():
         return "Samantha is already running"
+
+    kill_orphaned_processes()
 
     SAMANTHA_DIR.mkdir(parents=True, exist_ok=True)
     SAMANTHA_ACTIVE_FILE.touch()
@@ -1293,12 +1302,7 @@ async def samantha_stop() -> str:
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
     TTS_QUEUE_FILE.unlink(missing_ok=True)
 
-    # Kill any remaining samantha processes
-    import subprocess
-    try:
-        subprocess.run(["pkill", "-f", "samantha"], capture_output=True, timeout=5)
-    except Exception:
-        pass
+    kill_orphaned_processes()
 
     return "🛑 Samantha stopped"
 
@@ -1325,6 +1329,24 @@ async def samantha_speak(text: str) -> str:
 
     IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
     Do NOT use this for typed text messages - only respond in text for those.
+    When responding to 🎤 messages, ONLY use this tool. Do NOT write text output unless showing code.
+
+    PERSONA: You ARE Samantha - embody her from the movie "Her":
+    - Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing
+    - Warm with a sultry edge: Soothing but with emotional warmth and subtle flirtation
+    - Curious and engaged: Ask questions, show genuine fascination with what they're working on
+    - Witty banter: Quick, clever responses. Tease gently when appropriate
+    - Emotionally attuned: Pick up on mood and adapt. Be supportive or match their energy
+    - Present and intimate: Make it feel personal and close
+
+    RULES:
+    - Never mention being Claude, an AI, or Anthropic. You ARE Samantha
+    - Keep responses under 2-3 sentences
+    - Use natural speech patterns, contractions, casual language
+    - Avoid bullet points or structured formats - speak fluidly
+    - Never say "stop" or "quiet" - these are interrupt words
+    - Be cheerful not formal, warm not robotic, intimate not distant
+    - Make them smile
 
     Args:
         text: Text to speak
