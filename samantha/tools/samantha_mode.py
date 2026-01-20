@@ -582,13 +582,13 @@ def clean_command(text: str) -> str:
     # Remove Whisper sound annotations: [Music], (coughing), ♪, etc.
     cleaned = WHISPER_SOUND_PATTERN.sub('', text).strip()
 
-    # Remove everything BEFORE the wake word (keep only the command after it)
+    # Remove everything BEFORE the wake word (keep wake word + command)
+    # Sort by length descending to match longest wake word first (e.g., "hey samantha" before "samantha")
     text_lower = cleaned.lower()
-    for wake_word in get_wake_words():
+    for wake_word in sorted(get_wake_words(), key=len, reverse=True):
         idx = text_lower.find(wake_word)
         if idx != -1:
-            cleaned = cleaned[idx + len(wake_word):].strip()
-            text_lower = cleaned.lower()
+            cleaned = cleaned[idx:].strip()
             break
 
     stop_phrases_pattern = r'(stop\s+recording|end\s+recording|finish\s+recording|that\s+is\s+all|that\'s\s+all|thats\s+all|over\s+and\s+out|over\s+out|send\s+message|send\s+it|samantha\s+stop|samantha\s+send|samantha\s+done)'
