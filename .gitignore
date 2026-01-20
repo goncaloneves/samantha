@@ -1,0 +1,120 @@
+.external/
+!.external/repos.txt
+
+# Claude workspace - track plugin components, ignore local settings
+.claude/settings.local.json
+
+# Environment configuration
+.env.local
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+*.cover
+*.py,cover
+
+# Virtual environments
+venv/
+env/
+.venv/
+test-env/
+test-pkg-env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+logs
+*.err
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+*.whl
+
+# Test artifacts
+test_output/
+*.mp3
+*.wav
+*.pcm
+.aider*
+
+# Voice MCP specific
+voice-mcp_recordings/
+debug_recordings/
+
+# Documentation build
+docs/_build/
+docs/promote/
+
+# Strategic/Private documents
+docs/voicemode-brand/
+
+# Node modules (for livekit frontend)
+node_modules/
+.npm/
+
+# Next.js build artifacts
+.next/
+
+# Misc
+.cache/
+*.bak
+*.orig
+social
+recover-voicemode-promote/
+
+# Documentation build output
+site/
+
+# Generated documentation files
+docs/README_PROCESSED.md
+
+# Test files
+test_preferences.py
+testdir/
+
+# Profiling output
+*.prof
+
+# Model files (should be downloaded, not committed)
+models/
+*.mlpackage/
+*.mlmodel
+*.mlmodelc/
+
+# Coverage reports (duplicates removed - already in Python section)
+coverage.xml
+voicemode-install-feedback.md
