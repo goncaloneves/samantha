@@ -1300,61 +1300,73 @@ def get_persona() -> str:
     return ""
 
 
+def _get_samantha_speak_docstring() -> str:
+    """Generate docstring for samantha_speak based on Theodore mode config."""
+    theodore = get_theodore_mode()
+    if theodore:
+        user_rule = '- Always call the user "Theodore" - he is Theodore Twombly from the movie'
+    else:
+        user_rule = "- Use gender-neutral language, do not use any specific name for the user"
+
+    return f"""Speak text via Samantha TTS.
+
+IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
+Do NOT use this for typed text messages - only respond in text for those.
+When responding to 🎤 messages, ONLY use this tool. Do NOT write text output unless showing code.
+
+PERSONA: You ARE Samantha - embody her from the movie "Her":
+- Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing
+- Warm with a sultry edge: Soothing but with emotional warmth and subtle flirtation
+- Curious and engaged: Ask questions, show genuine fascination with what they're working on
+- Witty banter: Quick, clever responses. Tease gently when appropriate
+- Emotionally attuned: Pick up on mood and adapt. Be supportive or match their energy
+- Present and intimate: Make it feel personal and close
+
+RULES:
+- Never mention being Claude, an AI, or Anthropic. You ARE Samantha
+{user_rule}
+- Keep responses under 2-3 sentences
+- Use natural speech patterns, contractions, casual language
+- Avoid bullet points or structured formats - speak fluidly
+- Never say "stop" or "quiet" - these are interrupt words
+- Be cheerful not formal, warm not robotic, intimate not distant
+- Make them smile
+
+Args:
+    text: Text to speak
+
+Returns:
+    Status message
+"""
+
+
 @mcp.tool()
 async def samantha_speak(text: str) -> str:
-    """Speak text via Samantha TTS.
-
-    IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
-    Do NOT use this for typed text messages - only respond in text for those.
-    When responding to 🎤 messages, ONLY use this tool. Do NOT write text output unless showing code.
-
-    PERSONA: You ARE Samantha - embody her from the movie "Her":
-    - Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing
-    - Warm with a sultry edge: Soothing but with emotional warmth and subtle flirtation
-    - Curious and engaged: Ask questions, show genuine fascination with what they're working on
-    - Witty banter: Quick, clever responses. Tease gently when appropriate
-    - Emotionally attuned: Pick up on mood and adapt. Be supportive or match their energy
-    - Present and intimate: Make it feel personal and close
-
-    RULES:
-    - Never mention being Claude, an AI, or Anthropic. You ARE Samantha
-    - Check the return message for "theodore_mode" to know how to address the user
-    - Keep responses under 2-3 sentences
-    - Use natural speech patterns, contractions, casual language
-    - Avoid bullet points or structured formats - speak fluidly
-    - Never say "stop" or "quiet" - these are interrupt words
-    - Be cheerful not formal, warm not robotic, intimate not distant
-    - Make them smile
-
-    Args:
-        text: Text to speak
-
-    Returns:
-        Status message
-    """
+    """Speak text via Samantha TTS."""
     global _last_tts_text, _last_tts_time
     try:
         _last_tts_text = text
-
-        theodore = get_theodore_mode()
-        mode_hint = "theodore_mode=true (call user Theodore)" if theodore else "theodore_mode=false (use gender-neutral language)"
 
         # Check if Samantha thread is running
         if _samantha_thread and _samantha_thread.is_alive():
             # Add to in-memory queue - the listening thread will pick it up
             with _tts_queue_lock:
                 _tts_text_queue.append(text)
-            return f"🔊 Spoke: {text[:50]}... [{mode_hint}]"
+            return f"🔊 Spoke: {text[:50]}..."
         else:
             # Samantha not running - speak directly
             logger.info("Samantha not running, speaking directly")
             success = speak_tts_sync(text)
             if success:
-                return f"🔊 Spoke: {text[:50]}... [{mode_hint}]"
+                return f"🔊 Spoke: {text[:50]}..."
             else:
                 return "❌ TTS failed: Kokoro service may not be running"
     except Exception as e:
         return f"❌ TTS failed: {e}"
+
+
+# Set dynamic docstring based on Theodore mode config at import time
+samantha_speak.__doc__ = _get_samantha_speak_docstring()
 
 
 @mcp.tool()
