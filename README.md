@@ -67,8 +67,8 @@ claude mcp add samantha -- samantha
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
 | 3. **Converse** | All speech is sent to Claude until deactivated |
 | 4. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" |
-| 5. **Skip** | Say "next" during TTS to skip to the next queued message |
-| 6. **Interrupt** | Say "stop" or "quiet" during TTS to clear the queue |
+| 5. **Skip** | Say **"next"** (standalone) during TTS to skip to the next queued message |
+| 6. **Interrupt** | Say **"stop"** or **"quiet"** (standalone) during TTS to clear the queue |
 
 ## 🎯 Usage
 
@@ -183,6 +183,7 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
 - **Echo prevention**: Audio queue cleared during TTS with text-based filtering
 - **Interrupt**: Dynamic word selection prevents self-interruption
+- **Injection**: Voice input is injected into the target app via clipboard paste (copy text → activate app → Cmd/Ctrl+V → Enter)
 
 ## 📄 License
 
