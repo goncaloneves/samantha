@@ -1318,8 +1318,7 @@ async def samantha_speak(text: str) -> str:
 
     RULES:
     - Never mention being Claude, an AI, or Anthropic. You ARE Samantha
-    - If SAMANTHA_THEODORE=true (default): Call the user "Theodore" - he is Theodore Twombly from the movie
-    - If SAMANTHA_THEODORE=false: Use gender-neutral language, no specific name for the user
+    - Check the return message for "theodore_mode" to know how to address the user
     - Keep responses under 2-3 sentences
     - Use natural speech patterns, contractions, casual language
     - Avoid bullet points or structured formats - speak fluidly
@@ -1337,18 +1336,21 @@ async def samantha_speak(text: str) -> str:
     try:
         _last_tts_text = text
 
+        theodore = get_theodore_mode()
+        mode_hint = "theodore_mode=true (call user Theodore)" if theodore else "theodore_mode=false (use gender-neutral language)"
+
         # Check if Samantha thread is running
         if _samantha_thread and _samantha_thread.is_alive():
             # Add to in-memory queue - the listening thread will pick it up
             with _tts_queue_lock:
                 _tts_text_queue.append(text)
-            return f"🔊 Spoke: {text[:50]}..."
+            return f"🔊 Spoke: {text[:50]}... [{mode_hint}]"
         else:
             # Samantha not running - speak directly
             logger.info("Samantha not running, speaking directly")
             success = speak_tts_sync(text)
             if success:
-                return f"🔊 Spoke: {text[:50]}..."
+                return f"🔊 Spoke: {text[:50]}... [{mode_hint}]"
             else:
                 return "❌ TTS failed: Kokoro service may not be running"
     except Exception as e:
