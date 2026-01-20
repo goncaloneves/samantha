@@ -102,7 +102,7 @@ samantha-install download-model small  # Download additional Whisper model
 |----------|-------------|---------|
 | `SAMANTHA_WAKE_WORDS` | Comma-separated activation phrases | `hey samantha,samantha,...` |
 | `SAMANTHA_DEACTIVATION_WORDS` | Comma-separated deactivation phrases | `samantha sleep,goodbye samantha,...` |
-| `SAMANTHA_VOICE` | TTS voice to use | `af_sky` |
+| `SAMANTHA_VOICE` | TTS voice to use | `af_aoede` |
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
 | `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default |
 | `SAMANTHA_SHOW_STATUS` | Show status messages (activated/deactivated/interrupted) | `true` |
@@ -128,7 +128,7 @@ Config file values take precedence over environment variables.
 Alternatively, use environment variables:
 
 ```bash
-export SAMANTHA_VOICE="af_sky"
+export SAMANTHA_VOICE="af_aoede"
 export SAMANTHA_WAKE_WORDS="hey sam,hi sam,sam"
 export SAMANTHA_DEACTIVATION_WORDS="sam sleep,bye sam"
 export SAMANTHA_SHOW_STATUS="false"
