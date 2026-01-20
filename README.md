@@ -177,7 +177,7 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 
 ## 🔬 Technical Details
 
-- **VAD**: WebRTC VAD (aggressiveness=1) with audio normalization
+- **VAD**: WebRTC VAD with dynamic aggressiveness (2 for listening, 1 for interrupt detection)
 - **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
 - **TTS**: Kokoro PCM streaming (local, port 8880)
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper

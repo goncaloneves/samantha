@@ -121,18 +121,6 @@ DEFAULT_DEACTIVATION_PHRASES = [
 INTERRUPT_WORDS = ['stop', 'quiet']
 SKIP_WORDS = ['next', 'skip']
 
-# Whisper hallucination patterns - from training on subtitle data
-WHISPER_HALLUCINATIONS = [
-    # Subtitle credits
-    'thank you for watching', 'thanks for watching', 'please subscribe',
-    'like and subscribe', 'subtitles by', 'amara.org', 'amara org',
-    'transcription by', 'transcript by', 'captions by',
-    # Foreign subtitle credits
-    'untertitel', 'sous-titres', 'sottotitoli', 'legendas',
-    # Common false positives on silence
-    'you', 'the', 'so', 'oh', 'okay', 'bye', 'hmm',
-]
-
 # Whisper bracketed/parenthesized sound patterns (regex will strip these)
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
@@ -735,23 +723,6 @@ def sanitize_whisper_text(text: str) -> str:
     return cleaned
 
 
-def is_hallucination(text: str) -> bool:
-    """Check if cleaned text is a known Whisper hallucination."""
-    if not text:
-        return True
-
-    # Exact match hallucinations
-    if text in WHISPER_HALLUCINATIONS:
-        return True
-
-    # Partial match for subtitle credits
-    for pattern in ['subtitles by', 'transcription by', 'captions by', 'amara']:
-        if pattern in text:
-            return True
-
-    return False
-
-
 def is_noise(text: str) -> bool:
     """Check if transcription is just background noise, not speech."""
     if not text:
@@ -768,10 +739,6 @@ def is_noise(text: str) -> bool:
     for keyword in all_keywords:
         if keyword in sanitized:
             return False
-
-    # Check for Whisper hallucinations
-    if is_hallucination(sanitized):
-        return True
 
     # Check if it's only noise descriptor words
     noise_words = [
@@ -863,7 +830,8 @@ def samantha_loop_thread():
     MIN_RECORDING_DURATION = 0.3
     INITIAL_SILENCE_GRACE_PERIOD = 1.0
     VAD_SAMPLE_RATE = 16000
-    VAD_AGGRESSIVENESS = 1
+    VAD_AGGRESSIVENESS_LISTENING = 2  # More aggressive filtering when waiting for speech
+    VAD_AGGRESSIVENESS_TTS = 1  # Less aggressive during TTS to catch interrupts
 
     chunk_samples = int(SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
     vad_chunk_samples = int(VAD_SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
@@ -881,11 +849,11 @@ def samantha_loop_thread():
     def audio_callback(indata, frames, callback_time, status):
         if status:
             logger.warning("Audio stream status: %s", status)
-        # Always capture audio - we need it for interrupt detection during TTS
         audio_queue.put(indata.copy())
 
     try:
-        vad = webrtcvad.Vad(VAD_AGGRESSIVENESS) if VAD_AVAILABLE else None
+        vad = webrtcvad.Vad(VAD_AGGRESSIVENESS_LISTENING) if VAD_AVAILABLE else None
+        vad_tts = webrtcvad.Vad(VAD_AGGRESSIVENESS_TTS) if VAD_AVAILABLE else None
 
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=np.int16,
                            callback=audio_callback, blocksize=chunk_samples, device=get_input_device()):
@@ -941,10 +909,23 @@ def samantha_loop_thread():
                             chunk = audio_queue.get(timeout=0.05)
                             chunk_flat = chunk.flatten()
 
-                            # Always accumulate audio during TTS (don't rely on VAD - TTS interferes)
-                            audio_chunks.append(chunk_flat)
+                            # Check VAD for this chunk - only accumulate if speech detected
+                            # Use less aggressive VAD during TTS to catch interrupts
+                            is_speech_chunk = False
+                            if vad_tts:
+                                resampled_length = int(len(chunk_flat) * VAD_SAMPLE_RATE / SAMPLE_RATE)
+                                vad_chunk = scipy_signal.resample(chunk_flat, resampled_length)
+                                vad_chunk = vad_chunk[:vad_chunk_samples].astype(np.int16)
+                                try:
+                                    is_speech_chunk = vad_tts.is_speech(vad_chunk.tobytes(), VAD_SAMPLE_RATE)
+                                except Exception:
+                                    is_speech_chunk = False
 
-                            # Check for interrupt every 300ms of accumulated audio
+                            # Only accumulate chunks with detected speech
+                            if is_speech_chunk:
+                                audio_chunks.append(chunk_flat)
+
+                            # Check for interrupt every 300ms of accumulated speech audio
                             # Only start checking after 2 seconds to avoid echo from TTS start
                             accumulated_duration_ms = len(audio_chunks) * VAD_CHUNK_DURATION_MS
                             tts_elapsed = time.time() - _tts_start_time if _tts_start_time > 0 else 0
