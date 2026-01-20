@@ -49,7 +49,7 @@ This clones, builds, and configures:
 
 Options:
 ```bash
-samantha-install install -m small     # Use better Whisper model
+samantha-install install -m base      # Use smaller/faster Whisper model (142MB)
 samantha-install install --force      # Reinstall everything
 samantha-install install --whisper-only  # Only install Whisper
 ```
