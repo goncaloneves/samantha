@@ -578,9 +578,18 @@ def inject_into_app(text: str, log_type: str = None):
 
 
 def clean_command(text: str) -> str:
-    """Clean recorded command text. Removes Whisper metadata and anything AFTER stop phrases."""
+    """Clean recorded command text. Removes content BEFORE wake word, Whisper metadata, and anything AFTER stop phrases."""
     # Remove Whisper sound annotations: [Music], (coughing), ♪, etc.
     cleaned = WHISPER_SOUND_PATTERN.sub('', text).strip()
+
+    # Remove everything BEFORE the wake word (keep only the command after it)
+    text_lower = cleaned.lower()
+    for wake_word in get_wake_words():
+        idx = text_lower.find(wake_word)
+        if idx != -1:
+            cleaned = cleaned[idx + len(wake_word):].strip()
+            text_lower = cleaned.lower()
+            break
 
     stop_phrases_pattern = r'(stop\s+recording|end\s+recording|finish\s+recording|that\s+is\s+all|that\'s\s+all|thats\s+all|over\s+and\s+out|over\s+out|send\s+message|send\s+it|samantha\s+stop|samantha\s+send|samantha\s+done)'
     match = re.search(stop_phrases_pattern, cleaned, flags=re.IGNORECASE)
