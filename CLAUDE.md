@@ -103,6 +103,7 @@ Config file values take precedence over environment variables.
 | `SAMANTHA_VOICE` | Kokoro TTS voice | `af_sky` |
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
 | `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default |
+| `SAMANTHA_OUTPUT_DEVICE` | Audio output device index | System default |
 | `SAMANTHA_SHOW_STATUS` | Show status messages in chat | `true` |
 
 ## Technical Details

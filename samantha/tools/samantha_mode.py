@@ -90,6 +90,14 @@ def get_input_device():
     return None
 
 
+def get_output_device():
+    """Get configured output device, or system default."""
+    val = get_config("output_device")
+    if val is not None and val != "null":
+        return int(val) if val != -1 else None
+    return None
+
+
 def get_show_status() -> bool:
     val = get_config("show_status", "true")
     if isinstance(val, bool):
@@ -313,7 +321,7 @@ def speak_tts_sync(text: str) -> bool:
         else:
             samples = samples.reshape((-1, 1))
 
-        sd.play(samples, samplerate=audio.frame_rate)
+        sd.play(samples, samplerate=audio.frame_rate, device=get_output_device())
         while sd.get_stream().active:
             if _tts_interrupt:
                 sd.stop()
