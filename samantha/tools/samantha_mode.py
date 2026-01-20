@@ -18,6 +18,7 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -124,6 +125,8 @@ _samantha_task: Optional[asyncio.Task] = None
 _stop_event: Optional[asyncio.Event] = None
 _samantha_thread = None
 _thread_stop_flag = False
+_thread_ready = None
+_tts_done_event = None
 
 
 def log_conversation(entry_type: str, text: str):
@@ -868,7 +871,7 @@ def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
 
 def samantha_loop_thread():
     """Main Samantha voice assistant loop running in a dedicated thread."""
-    global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt
+    global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event
 
     device_name = "default"
     input_dev = get_input_device()
@@ -917,16 +920,27 @@ def samantha_loop_thread():
                            callback=audio_callback, blocksize=chunk_samples, device=get_input_device()):
             logger.debug("Started continuous audio stream")
 
+            if _thread_ready:
+                _thread_ready.set()
+
             while not _thread_stop_flag:
                 try:
                     # Check if we need to start TTS (runs in background thread)
-                    if TTS_QUEUE_FILE.exists() and not _tts_playing:
+                    if TTS_QUEUE_FILE.exists():
                         try:
                             tts_text = TTS_QUEUE_FILE.read_text().strip()
                             TTS_QUEUE_FILE.unlink()
+
+                            # If TTS is already playing, interrupt it and wait for it to stop
+                            if _tts_playing and _tts_done_event:
+                                _tts_interrupt = True
+                                _tts_done_event.wait(timeout=2.0)
+
                             if tts_text:
-                                # Set flag BEFORE starting TTS
+                                # Set flags BEFORE starting TTS
                                 _tts_playing = True
+                                _tts_start_time = time.time()
+                                _tts_done_event = threading.Event()
 
                                 # Clear any accumulated audio before TTS
                                 while not audio_queue.empty():
@@ -940,16 +954,19 @@ def samantha_loop_thread():
                                 recording_start = 0
 
                                 # Start TTS in background thread so we can listen for interrupts
-                                import threading
+                                done_event = _tts_done_event
 
                                 def tts_thread_func():
                                     global _tts_playing, _last_tts_time, _tts_start_time
                                     active_words = get_active_interrupt_words()
                                     logger.info("🎯 Active interrupt words: %s", active_words)
-                                    speak_tts_sync(tts_text)
-                                    _last_tts_time = time.time()
-                                    _tts_start_time = 0
-                                    _tts_playing = False
+                                    try:
+                                        speak_tts_sync(tts_text)
+                                    finally:
+                                        _last_tts_time = time.time()
+                                        _tts_start_time = 0
+                                        _tts_playing = False
+                                        done_event.set()
 
                                 tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
                                 tts_thread.start()
@@ -1255,8 +1272,7 @@ async def samantha_start() -> str:
     Returns:
         Status message
     """
-    global _samantha_thread, _thread_stop_flag
-    import threading
+    global _samantha_thread, _thread_stop_flag, _thread_ready
 
     if _samantha_thread and _samantha_thread.is_alive():
         return "Samantha is already running"
@@ -1273,8 +1289,11 @@ async def samantha_start() -> str:
         return "❌ Failed to start Whisper STT service"
 
     _thread_stop_flag = False
+    _thread_ready = threading.Event()
     _samantha_thread = threading.Thread(target=samantha_loop_thread, daemon=True)
     _samantha_thread.start()
+
+    _thread_ready.wait(timeout=30.0)
 
     return "🎧 Samantha started. Say 'Hey Samantha' to activate. Say 'Samantha sleep' to deactivate. Say 'stop' or 'quiet' to interrupt TTS."
 
@@ -1337,10 +1356,9 @@ async def samantha_speak(text: str, include_persona: bool = True) -> str:
     Returns:
         Status message with persona reminder
     """
-    global _last_tts_text, _last_tts_time, _tts_start_time
+    global _last_tts_text, _last_tts_time
     try:
         _last_tts_text = text
-        _tts_start_time = time.time()
 
         # Write to TTS queue file - the listening thread will pick it up and set _tts_playing
         TTS_QUEUE_FILE.write_text(text)
