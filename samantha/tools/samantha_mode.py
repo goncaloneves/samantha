@@ -83,10 +83,21 @@ def get_voice() -> str:
 
 
 def get_input_device():
+    """Get configured input device, or current system default if not configured."""
     val = get_config("input_device")
     if val is not None and val != "null":
         return int(val) if val != -1 else None
-    return None
+    # Return current system default input device
+    return sd.default.device[0]
+
+
+def get_output_device():
+    """Get configured output device, or current system default if not configured."""
+    val = get_config("output_device")
+    if val is not None and val != "null":
+        return int(val) if val != -1 else None
+    # Return current system default output device
+    return sd.default.device[1]
 
 
 def get_show_status() -> bool:
@@ -294,6 +305,7 @@ def speak_tts_sync(text: str) -> bool:
         import requests
 
         stream = sd.OutputStream(
+            device=get_output_device(),
             samplerate=24000,
             channels=1,
             dtype='int16',
@@ -828,14 +840,12 @@ def samantha_loop_thread():
     """Main Samantha voice assistant loop running in a dedicated thread."""
     global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event, _tts_text_queue
 
-    device_name = "default"
     input_dev = get_input_device()
-    if input_dev is not None:
-        try:
-            device_info = sd.query_devices(input_dev)
-            device_name = device_info['name']
-        except Exception:
-            device_name = f"device {input_dev}"
+    try:
+        device_info = sd.query_devices(input_dev)
+        device_name = device_info['name']
+    except Exception:
+        device_name = f"device {input_dev}"
 
     logger.info("🎧 Samantha thread started (VAD: %s, mic: %s)", "enabled" if VAD_AVAILABLE else "disabled", device_name)
     logger.info("   Say 'Hey Samantha' to activate")
