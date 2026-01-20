@@ -845,7 +845,7 @@ def samantha_loop_thread():
     from scipy import signal as scipy_signal
 
     VAD_CHUNK_DURATION_MS = 30
-    SILENCE_THRESHOLD_MS = 1500
+    SILENCE_THRESHOLD_MS = 3000
     MIN_RECORDING_DURATION = 0.3
     VAD_SAMPLE_RATE = 16000
     VAD_AGGRESSIVENESS = 1
