@@ -127,6 +127,8 @@ _samantha_thread = None
 _thread_stop_flag = False
 _thread_ready = None
 _tts_done_event = None
+_tts_text_queue = []
+_tts_queue_lock = threading.Lock()
 
 
 def log_conversation(entry_type: str, text: str):
@@ -871,7 +873,7 @@ def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
 
 def samantha_loop_thread():
     """Main Samantha voice assistant loop running in a dedicated thread."""
-    global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event
+    global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event, _tts_text_queue
 
     device_name = "default"
     input_dev = get_input_device()
@@ -926,53 +928,59 @@ def samantha_loop_thread():
             while not _thread_stop_flag:
                 try:
                     # Check if we need to start TTS (runs in background thread)
+                    # First, check for new messages and add to queue
                     if TTS_QUEUE_FILE.exists():
                         try:
                             tts_text = TTS_QUEUE_FILE.read_text().strip()
                             TTS_QUEUE_FILE.unlink()
-
-                            # If TTS is already playing, interrupt it and wait for it to stop
-                            if _tts_playing and _tts_done_event:
-                                _tts_interrupt = True
-                                _tts_done_event.wait(timeout=2.0)
-
                             if tts_text:
-                                # Set flags BEFORE starting TTS
-                                _tts_playing = True
-                                _tts_start_time = time.time()
-                                _tts_done_event = threading.Event()
-
-                                # Clear any accumulated audio before TTS
-                                while not audio_queue.empty():
-                                    try:
-                                        audio_queue.get_nowait()
-                                    except queue.Empty:
-                                        break
-                                speech_detected = False
-                                audio_chunks = []
-                                silence_duration_ms = 0
-                                recording_start = 0
-
-                                # Start TTS in background thread so we can listen for interrupts
-                                done_event = _tts_done_event
-
-                                def tts_thread_func():
-                                    global _tts_playing, _last_tts_time, _tts_start_time
-                                    active_words = get_active_interrupt_words()
-                                    logger.info("🎯 Active interrupt words: %s", active_words)
-                                    try:
-                                        speak_tts_sync(tts_text)
-                                    finally:
-                                        _last_tts_time = time.time()
-                                        _tts_start_time = 0
-                                        _tts_playing = False
-                                        done_event.set()
-
-                                tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
-                                tts_thread.start()
+                                with _tts_queue_lock:
+                                    _tts_text_queue.append(tts_text)
                         except Exception as e:
-                            logger.error("TTS queue error: %s", e)
-                            _tts_playing = False
+                            logger.error("TTS queue file error: %s", e)
+
+                    # Process queue if not currently playing
+                    tts_text = None
+                    if not _tts_playing:
+                        with _tts_queue_lock:
+                            if _tts_text_queue:
+                                tts_text = _tts_text_queue.pop(0)
+
+                    if tts_text:
+                        # Set flags BEFORE starting TTS
+                        _tts_playing = True
+                        _tts_start_time = time.time()
+                        _tts_done_event = threading.Event()
+
+                        # Clear any accumulated audio before TTS
+                        while not audio_queue.empty():
+                            try:
+                                audio_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        speech_detected = False
+                        audio_chunks = []
+                        silence_duration_ms = 0
+                        recording_start = 0
+
+                        # Start TTS in background thread so we can listen for interrupts
+                        done_event = _tts_done_event
+                        tts_text_to_speak = tts_text
+
+                        def tts_thread_func():
+                            global _tts_playing, _last_tts_time, _tts_start_time
+                            active_words = get_active_interrupt_words()
+                            logger.info("🎯 Active interrupt words: %s", active_words)
+                            try:
+                                speak_tts_sync(tts_text_to_speak)
+                            finally:
+                                _last_tts_time = time.time()
+                                _tts_start_time = 0
+                                _tts_playing = False
+                                done_event.set()
+
+                        tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
+                        tts_thread.start()
 
                     # While TTS is playing, listen for interrupt trigger words
                     if _tts_playing:
@@ -997,6 +1005,9 @@ def samantha_loop_thread():
                                     log_conversation("INTERRUPT", text)
                                     _tts_interrupt = True
                                     _tts_playing = False
+                                    # Clear the TTS queue on user interrupt
+                                    with _tts_queue_lock:
+                                        _tts_text_queue.clear()
                                     time.sleep(0.1)
                                     while not audio_queue.empty():
                                         try:
