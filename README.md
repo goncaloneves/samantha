@@ -183,7 +183,21 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
 - **Echo prevention**: Audio queue cleared during TTS with text-based filtering
 - **Interrupt**: Dynamic word selection prevents self-interruption
-- **Injection**: Voice input is injected into the target app via clipboard paste (copy text → activate app → Cmd/Ctrl+V → Enter)
+
+### How Injection Works
+
+When you speak to Samantha, your voice is transcribed and "injected" into the target app (Cursor, Terminal, etc.) as if you typed it:
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   🎙️ Mic    │────▶│  Whisper    │────▶│  Clipboard  │────▶│  Activate   │────▶│   Paste +   │
+│   Record    │     │  Transcribe │     │    Copy     │     │  Target App │     │    Enter    │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+     Audio              Text              pbcopy/            Bring window          Cmd+V +
+                                          xclip              to focus              Return
+```
+
+This clipboard-based approach works reliably across all supported apps without requiring app-specific APIs.
 
 ## 📄 License
 
