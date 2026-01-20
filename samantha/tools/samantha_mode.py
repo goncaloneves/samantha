@@ -1117,70 +1117,126 @@ def samantha_loop_thread():
 
 
 async def ensure_kokoro_running() -> bool:
-    """Start Kokoro TTS if not already running."""
+    """Check if Kokoro TTS is running, attempt to start if not."""
+    health_url = "http://localhost:8880/health"
+
+    # Check if already running
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(KOKORO_URL.replace("/v1/audio/speech", "/health"))
+            response = await client.get(health_url)
             if response.status_code == 200:
+                logger.info("Kokoro TTS is running")
                 return True
     except Exception:
         pass
 
-    logger.info("Starting Kokoro TTS service...")
-    try:
-        plist_path = Path.home() / "Library/LaunchAgents/com.samantha.kokoro.plist"
-        subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
-        subprocess.run(["launchctl", "start", "com.samantha.kokoro"], capture_output=True)
-        for _ in range(10):
-            await asyncio.sleep(1)
-            try:
-                async with httpx.AsyncClient(timeout=2.0) as client:
-                    response = await client.post(
-                        KOKORO_URL,
-                        json={"model": "kokoro", "input": "ready", "voice": "af_sarah"},
-                    )
-                    if response.status_code == 200:
-                        logger.info("Kokoro TTS started successfully")
-                        return True
-            except Exception:
-                pass
-        logger.error("Failed to start Kokoro TTS")
-        return False
-    except Exception as e:
-        logger.error("Error starting Kokoro: %s", e)
-        return False
+    logger.info("Kokoro TTS not running, attempting to start...")
+
+    # Try to start
+    kokoro_dir = SAMANTHA_DIR / "services" / "kokoro"
+    system = platform.system()
+    started = False
+
+    if system == "Darwin":
+        start_script = kokoro_dir / "start-gpu_mac.sh"
+    elif system == "Linux":
+        if shutil.which("nvidia-smi"):
+            start_script = kokoro_dir / "start-gpu.sh"
+        else:
+            start_script = kokoro_dir / "start-cpu.sh"
+    else:
+        start_script = kokoro_dir / "start-cpu.sh"
+
+    if start_script.exists():
+        try:
+            subprocess.Popen(
+                ["bash", str(start_script)],
+                cwd=str(kokoro_dir),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            logger.info("Started Kokoro via %s", start_script.name)
+            started = True
+        except Exception as e:
+            logger.error("Failed to start Kokoro script: %s", e)
+
+    if not started:
+        logger.error("Kokoro start script not found at %s", start_script)
+        logger.error("Run 'samantha-install install' to install Kokoro")
+
+    # Wait for service to be ready (Kokoro takes longer to load models)
+    for i in range(45):
+        await asyncio.sleep(1)
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get(health_url)
+                if response.status_code == 200:
+                    logger.info("Kokoro TTS started successfully")
+                    return True
+        except Exception:
+            pass
+        if i % 10 == 9:
+            logger.info("Waiting for Kokoro TTS... (%ds)", i + 1)
+
+    logger.error("Failed to start Kokoro TTS - please start manually:")
+    logger.error("  cd ~/.samantha/services/kokoro && ./%s", start_script.name if start_script else "start-gpu_mac.sh")
+    return False
 
 
 async def ensure_whisper_running() -> bool:
-    """Start Whisper STT if not already running."""
+    """Check if Whisper STT is running, attempt to start if not."""
+    health_url = "http://localhost:2022/health"
+
+    # Check if already running
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(WHISPER_URL.replace("/v1/audio/transcriptions", "/health"))
+            response = await client.get(health_url)
             if response.status_code == 200:
+                logger.info("Whisper STT is running")
                 return True
     except Exception:
         pass
 
-    logger.info("Starting Whisper STT service...")
-    try:
-        plist_path = Path.home() / "Library/LaunchAgents/com.samantha.whisper.plist"
-        subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
-        subprocess.run(["launchctl", "start", "com.samantha.whisper"], capture_output=True)
-        for _ in range(10):
-            await asyncio.sleep(1)
+    logger.info("Whisper STT not running, attempting to start...")
+
+    # Try to start on macOS
+    if platform.system() == "Darwin":
+        started = False
+        start_script = SAMANTHA_DIR / "services" / "whisper" / "bin" / "start-whisper-server.sh"
+
+        if start_script.exists():
             try:
-                async with httpx.AsyncClient(timeout=2.0) as client:
-                    response = await client.get(WHISPER_URL.replace("/v1/audio/transcriptions", "/health"))
-                    if response.status_code == 200:
-                        logger.info("Whisper STT started successfully")
-                        return True
-            except Exception:
-                pass
-        logger.error("Failed to start Whisper STT")
-        return False
-    except Exception as e:
-        logger.error("Error starting Whisper: %s", e)
-        return False
+                subprocess.Popen(
+                    ["bash", str(start_script)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                logger.info("Started Whisper via start script")
+                started = True
+            except Exception as e:
+                logger.error("Failed to start Whisper script: %s", e)
+
+        if not started:
+            logger.error("Whisper start script not found at %s", start_script)
+            logger.error("Run 'samantha-install install' to install Whisper")
+
+    # Wait for service to be ready
+    for i in range(20):
+        await asyncio.sleep(1)
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get(health_url)
+                if response.status_code == 200:
+                    logger.info("Whisper STT started successfully")
+                    return True
+        except Exception:
+            pass
+        if i % 5 == 4:
+            logger.info("Waiting for Whisper STT... (%ds)", i + 1)
+
+    logger.error("Failed to start Whisper STT - please start manually:")
+    logger.error("  ~/.samantha/services/whisper/bin/start-whisper-server.sh")
+    return False
 
 
 @mcp.tool()

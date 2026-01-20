@@ -22,17 +22,6 @@ Samantha enables hands-free voice conversations with Claude Code. Say **"Hey Sam
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-Install local voice services (Whisper STT + Kokoro TTS):
-```bash
-uvx voice-mode-install
-```
-
-This installs and configures:
-- **Whisper** - Local speech-to-text (runs on localhost:2022)
-- **Kokoro** - Local text-to-speech (runs on localhost:8880)
-
 ### Installation
 
 **Option 1: Install from GitHub (recommended)**
@@ -47,7 +36,26 @@ cd samantha
 pip install -e .
 ```
 
-Then add to Claude Code:
+### Install Voice Services
+
+Install local Whisper STT and Kokoro TTS:
+```bash
+samantha-install install
+```
+
+This clones, builds, and configures:
+- **Whisper** - Local speech-to-text (runs on localhost:2022)
+- **Kokoro** - Local text-to-speech (runs on localhost:8880)
+
+Options:
+```bash
+samantha-install install -m small     # Use better Whisper model
+samantha-install install --force      # Reinstall everything
+samantha-install install --whisper-only  # Only install Whisper
+```
+
+### Add to Claude Code
+
 ```bash
 claude mcp add samantha -- samantha
 ```
@@ -70,6 +78,14 @@ claude mcp add samantha -- samantha
 "stop" / "quiet"         # Interrupt TTS
 "Samantha sleep"         # Deactivate (go idle)
 /samantha:stop           # Stop voice mode completely
+```
+
+### CLI Commands
+
+```bash
+samantha-install install    # Install Whisper + Kokoro
+samantha-install status     # Check service status
+samantha-install download-model small  # Download additional Whisper model
 ```
 
 ## 🔧 MCP Tools

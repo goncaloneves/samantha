@@ -101,6 +101,7 @@ Issues = "https://github.com/goncaloneves/samantha/issues"
 
 [project.scripts]
 samantha = "samantha.server:main"
+samantha-install = "samantha.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["samantha"]
