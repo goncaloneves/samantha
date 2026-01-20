@@ -17,7 +17,7 @@ Samantha enables hands-free voice conversations with Claude Code. Say **"Hey Sam
 - **Wake word activation** - Say "Hey Samantha" to start
 - **Continuous conversation** - Stay active until you say goodbye
 - **Natural TTS responses** - Powered by Kokoro with multiple voice options
-- **Interrupt support** - Say "stop" or "quiet" to interrupt TTS
+- **Interrupt support** - Say "stop", "quiet", "enough", or "halt" to interrupt TTS
 - **Cross-platform** - Works on macOS, Linux, and Windows
 
 ## 🚀 Quick Start
@@ -67,16 +67,16 @@ claude mcp add samantha -- samantha
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
 | 3. **Converse** | All speech is sent to Claude until deactivated |
 | 4. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" |
-| 5. **Skip** | Say **"next"** or **"skip"** during TTS to skip to the next queued message |
-| 6. **Interrupt** | Say **"stop"** or **"quiet"** during TTS to clear the queue |
+| 5. **Skip** | Say **"continue"** or **"skip"** during TTS to skip to the next queued message |
+| 6. **Interrupt** | Say **"stop"**, **"quiet"**, **"enough"**, or **"halt"** during TTS to clear the queue |
 
 ## 🎯 Usage
 
 ```
 /samantha:start          # Start voice mode
 "Hey Samantha, ..."      # Activate and speak
-"next" / "skip"          # Skip to next message in queue
-"stop" / "quiet"         # Interrupt TTS and clear queue (works in phrases too)
+"continue" / "skip"      # Skip to next message in queue
+"stop" / "quiet" / "enough" / "halt"  # Interrupt TTS and clear queue
 "Samantha sleep"         # Deactivate (go idle)
 /samantha:stop           # Stop voice mode completely
 ```
@@ -177,7 +177,7 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 
 ## 🔬 Technical Details
 
-- **VAD**: WebRTC VAD with dynamic aggressiveness (2 for listening, 1 for interrupt detection)
+- **VAD**: WebRTC VAD with aggressiveness level 2 for both listening and interrupt detection
 - **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
 - **TTS**: Kokoro PCM streaming (local, port 8880)
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
