@@ -35,16 +35,21 @@ This installs and configures:
 
 ### Installation
 
+**Option 1: Install from GitHub (recommended)**
 ```bash
-# Clone the repo
+pip install git+https://github.com/goncaloneves/samantha.git
+```
+
+**Option 2: Clone and install locally**
+```bash
 git clone https://github.com/goncaloneves/samantha.git
 cd samantha
+pip install -e .
+```
 
-# Install dependencies
-uv sync
-
-# Add MCP server to Claude Code
-claude mcp add samantha -- uv --directory /path/to/samantha run samantha
+Then add to Claude Code:
+```bash
+claude mcp add samantha-voice -- samantha-voice
 ```
 
 ## 📖 How It Works
