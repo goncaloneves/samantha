@@ -330,9 +330,9 @@ def cli():
 
 @cli.command()
 @click.option('-y', '--yes', is_flag=True, help='Run without prompts (auto-accept all)')
-@click.option('-m', '--model', default='base',
+@click.option('-m', '--model', default='small',
               type=click.Choice(['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3']),
-              help='Whisper model to download')
+              help='Whisper model to download (default: small)')
 @click.option('--force', is_flag=True, help='Force reinstall even if already installed')
 @click.option('--whisper-only', is_flag=True, help='Only install Whisper STT')
 @click.option('--kokoro-only', is_flag=True, help='Only install Kokoro TTS')
