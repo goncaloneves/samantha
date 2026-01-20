@@ -67,16 +67,16 @@ claude mcp add samantha -- samantha
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
 | 3. **Converse** | All speech is sent to Claude until deactivated |
 | 4. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" |
-| 5. **Skip** | Say **"next"** (standalone) during TTS to skip to the next queued message |
-| 6. **Interrupt** | Say **"stop"** or **"quiet"** (standalone) during TTS to clear the queue |
+| 5. **Skip** | Say **"next"** or **"skip"** during TTS to skip to the next queued message |
+| 6. **Interrupt** | Say **"stop"** or **"quiet"** during TTS to clear the queue |
 
 ## 🎯 Usage
 
 ```
 /samantha:start          # Start voice mode
 "Hey Samantha, ..."      # Activate and speak
-"next"                   # Skip to next message in queue
-"stop" / "quiet"         # Interrupt TTS and clear queue
+"next" / "skip"          # Skip to next message in queue
+"stop" / "quiet"         # Interrupt TTS and clear queue (works in phrases too)
 "Samantha sleep"         # Deactivate (go idle)
 /samantha:stop           # Stop voice mode completely
 ```
@@ -178,11 +178,12 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 ## 🔬 Technical Details
 
 - **VAD**: WebRTC VAD (aggressiveness=1) with audio normalization
-- **STT**: Whisper (local, port 2022)
+- **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
 - **TTS**: Kokoro PCM streaming (local, port 8880)
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
+- **Silence detection**: 1s threshold with 1s initial grace period
 - **Echo prevention**: Audio queue cleared during TTS with text-based filtering
-- **Interrupt**: Dynamic word selection prevents self-interruption
+- **Interrupt**: Works with phrases like "please stop" - dynamic word filtering prevents self-interruption
 
 ### How Injection Works
 
