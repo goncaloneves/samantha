@@ -850,6 +850,7 @@ def samantha_loop_thread():
     VAD_SAMPLE_RATE = 16000
     VAD_AGGRESSIVENESS_LISTENING = 2  # More aggressive filtering when waiting for speech
     VAD_AGGRESSIVENESS_TTS = 2  # Same aggressiveness during TTS to filter speaker bleed
+    MAX_INACTIVE_AUDIO_MS = 15000  # Max audio buffer when inactive (15 seconds) - prevents unbounded accumulation
 
     chunk_samples = int(SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
     vad_chunk_samples = int(VAD_SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
@@ -1019,6 +1020,13 @@ def samantha_loop_thread():
 
                     chunk_flat = chunk.flatten()
                     audio_chunks.append(chunk_flat)
+
+                    # When inactive, trim audio buffer to prevent unbounded accumulation
+                    # Keep only the last MAX_INACTIVE_AUDIO_MS worth of audio
+                    if not is_active:
+                        max_chunks = MAX_INACTIVE_AUDIO_MS // VAD_CHUNK_DURATION_MS
+                        if len(audio_chunks) > max_chunks:
+                            audio_chunks = audio_chunks[-max_chunks:]
 
                     is_speech = False
                     if vad:
