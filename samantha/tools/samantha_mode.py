@@ -346,6 +346,9 @@ def speak_tts_sync(text: str) -> bool:
         return True
     except Exception as e:
         logger.error("TTS error: %s", e)
+        # On PortAudio error, try afplay fallback on macOS
+        if "PortAudio" in str(e) and platform.system() == "Darwin":
+            return _speak_tts_afplay_fallback(text)
         return False
     finally:
         if stream:
@@ -354,6 +357,41 @@ def speak_tts_sync(text: str) -> bool:
             except Exception:
                 pass
         _tts_interrupt = False
+
+
+def _speak_tts_afplay_fallback(text: str) -> bool:
+    """Fallback TTS using afplay on macOS when sounddevice fails (e.g., after device hot-plug)."""
+    import tempfile
+    try:
+        import requests
+        logger.info("🔊 TTS fallback: using afplay")
+
+        response = requests.post(
+            KOKORO_URL,
+            json={
+                "model": "kokoro",
+                "input": text,
+                "voice": get_voice(),
+                "response_format": "wav",
+            },
+            timeout=60.0,
+        )
+
+        if response.status_code != 200:
+            logger.error("TTS fallback error: HTTP %s", response.status_code)
+            return False
+
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.write(response.content)
+            temp_path = f.name
+
+        subprocess.run(["afplay", temp_path], check=True)
+        os.unlink(temp_path)
+        log_conversation("TTS", text)
+        return True
+    except Exception as e:
+        logger.error("TTS fallback error: %s", e)
+        return False
 
 
 async def speak_tts(text: str) -> bool:
