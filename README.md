@@ -141,7 +141,7 @@ export SAMANTHA_INPUT_DEVICE="2"  # Use `python -m sounddevice` to list devices
 export SAMANTHA_VOICE="af_sky"  # Default - similar to Samantha from "Her"
 ```
 
-Available voices: `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_aoede`, `bf_emma`
+Available voices: `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_aoede`, `af_kore`, `bf_emma`, `bf_isabella`
 
 ### Whisper Model Selection
 
