@@ -112,6 +112,7 @@ STOP_PHRASES = [
 
 DEFAULT_DEACTIVATION_PHRASES = [
     'samantha sleep', 'samantha goodbye', 'goodbye samantha',
+    'bye samantha', 'samantha bye',
     "that's all samantha", 'thats all samantha', 'that is all samantha',
     'samantha go to sleep', 'go to sleep samantha',
     'samantha pause', 'pause samantha',
@@ -966,8 +967,10 @@ def samantha_loop_thread():
                             audio_chunks.append(chunk_flat)
 
                             # Check for interrupt every 300ms of accumulated audio
+                            # Only start checking after 2 seconds to avoid echo from TTS start
                             accumulated_duration_ms = len(audio_chunks) * VAD_CHUNK_DURATION_MS
-                            if accumulated_duration_ms >= 300:
+                            tts_elapsed = time.time() - _tts_start_time if _tts_start_time > 0 else 0
+                            if accumulated_duration_ms >= 300 and tts_elapsed >= 2.0:
                                 full_audio = np.concatenate(audio_chunks)
                                 text = transcribe_audio_sync(full_audio)
                                 logger.info("🔍 TTS interrupt check: %s", text[:50] if text else "None")
@@ -976,6 +979,7 @@ def samantha_loop_thread():
                                     logger.info("🛑 Interrupt detected: %s", text[:50])
                                     log_conversation("INTERRUPT", text)
                                     _tts_interrupt = True
+                                    _tts_playing = False
                                     time.sleep(0.1)
                                     while not audio_queue.empty():
                                         try:
@@ -983,8 +987,7 @@ def samantha_loop_thread():
                                         except queue.Empty:
                                             break
                                     if get_show_status():
-                                        inject_into_app("🤫 [Speech interrupted]")
-                                    play_chime()
+                                        inject_into_app("<!-- 🤫 [Speech interrupted] -->")
                                     if is_active:
                                         last_speech_time = time.time()
 
@@ -1077,7 +1080,7 @@ def samantha_loop_thread():
                                                 is_active = False
                                                 play_goodbye_chime()
                                                 if get_show_status():
-                                                    inject_into_app("😴 [Samantha deactivated]")
+                                                    inject_into_app("<!-- 😴 [Samantha deactivated] -->")
                                             else:
                                                 logger.info("🟢 Active - sending to Cursor")
                                                 last_speech_time = time.time()
@@ -1091,7 +1094,7 @@ def samantha_loop_thread():
                                             last_speech_time = time.time()
                                             play_chime()
                                             if get_show_status():
-                                                inject_into_app("👋 [Samantha activated]")
+                                                inject_into_app("<!-- 👋 [Samantha activated] -->")
                                             cleaned = clean_command(text)
                                             if cleaned:
                                                 log_conversation("STT", cleaned)
