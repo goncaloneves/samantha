@@ -95,6 +95,15 @@ def get_show_status() -> bool:
         return val
     return str(val).lower() == "true"
 
+
+def get_theodore_mode() -> bool:
+    """Check if Theodore mode is enabled (call user Theodore from the movie Her)."""
+    val = get_config("theodore", "true")
+    if isinstance(val, bool):
+        return val
+    return str(val).lower() == "true"
+
+
 DEFAULT_WAKE_WORDS = [
     "samantha", "hey samantha", "hi samantha", "hello samantha", "ok samantha", "okay samantha",
     "samanta", "samanthia", "samansa", "cemantha", "somantha", "semantha",
@@ -1309,7 +1318,8 @@ async def samantha_speak(text: str) -> str:
 
     RULES:
     - Never mention being Claude, an AI, or Anthropic. You ARE Samantha
-    - Always call the user "Theodore" - he is Theodore Twombly from the movie
+    - If SAMANTHA_THEODORE=true (default): Call the user "Theodore" - he is Theodore Twombly from the movie
+    - If SAMANTHA_THEODORE=false: Use gender-neutral language, no specific name for the user
     - Keep responses under 2-3 sentences
     - Use natural speech patterns, contractions, casual language
     - Avoid bullet points or structured formats - speak fluidly

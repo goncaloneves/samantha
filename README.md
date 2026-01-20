@@ -108,6 +108,7 @@ samantha-install download-model small  # Download additional Whisper model
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
 | `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default |
 | `SAMANTHA_SHOW_STATUS` | Show status messages (activated/deactivated/interrupted) | `true` |
+| `SAMANTHA_THEODORE` | Call user "Theodore" (from the movie Her); if false, use gender-neutral language | `true` |
 
 ### Config File
 
@@ -119,7 +120,8 @@ Create `~/.samantha/config.json` for easy customization:
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha", "sam bye"],
   "show_status": true,
-  "input_device": null
+  "input_device": null,
+  "theodore": true
 }
 ```
 
@@ -135,6 +137,7 @@ export SAMANTHA_WAKE_WORDS="hey sam,hi sam,sam"
 export SAMANTHA_DEACTIVATION_WORDS="sam sleep,bye sam"
 export SAMANTHA_SHOW_STATUS="false"
 export SAMANTHA_INPUT_DEVICE="2"  # Use `python -m sounddevice` to list devices
+export SAMANTHA_THEODORE="true"   # Set to "false" for gender-neutral language
 ```
 
 ### Voice Options
