@@ -138,7 +138,7 @@ export SAMANTHA_INPUT_DEVICE="2"  # Use `python -m sounddevice` to list devices
 ### Voice Options
 
 ```bash
-export SAMANTHA_VOICE="af_sky"  # Default - similar to Samantha from "Her"
+export SAMANTHA_VOICE="af_aoede"  # Expressive voice inspired by the Greek muse of song
 ```
 
 Available voices: `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_aoede`, `af_kore`, `bf_emma`, `bf_isabella`
