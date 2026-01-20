@@ -108,9 +108,10 @@ Config file values take precedence over environment variables.
 ## Technical Details
 
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
-- **VAD**: WebRTC VAD (aggressiveness=1) with audio normalization
+- **VAD**: WebRTC VAD (aggressiveness=1) for responsive speech detection
+- **Audio filtering**: Energy threshold (1500) filters low-amplitude noise before Whisper
 - **STT**: Whisper (localhost:2022)
-- **TTS**: Kokoro PCM streaming (localhost:8880)
+- **TTS**: Kokoro via sounddevice (uses system default output)
 - **Injection**: Clipboard paste into frontmost app
 - **Interrupt**: Dynamic word selection prevents TTS self-interruption
 - **Session timeout**: 30 minutes of silence returns to idle

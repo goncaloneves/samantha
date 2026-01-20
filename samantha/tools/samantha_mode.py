@@ -83,21 +83,11 @@ def get_voice() -> str:
 
 
 def get_input_device():
-    """Get configured input device, or current system default if not configured."""
+    """Get configured input device, or system default."""
     val = get_config("input_device")
     if val is not None and val != "null":
         return int(val) if val != -1 else None
-    # Return current system default input device
-    return sd.default.device[0]
-
-
-def get_output_device():
-    """Get configured output device, or current system default if not configured."""
-    val = get_config("output_device")
-    if val is not None and val != "null":
-        return int(val) if val != -1 else None
-    # Return current system default output device
-    return sd.default.device[1]
+    return None
 
 
 def get_show_status() -> bool:
@@ -141,7 +131,6 @@ DEFAULT_DEACTIVATION_PHRASES = [
 INTERRUPT_WORDS = ['stop', 'quiet', 'enough', 'halt']
 SKIP_WORDS = ['continue', 'skip']
 
-# Whisper bracketed/parenthesized sound patterns (regex will strip these)
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
 SUPPORTED_APPS = ["Cursor", "Claude", "Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty"]
@@ -167,7 +156,6 @@ def log_conversation(entry_type: str, text: str):
     else:
         log_entry = f"[{timestamp}] {entry_type}: {text}"
 
-    # Log to file only - no injection (MCP tool calls already visible in Cursor)
     try:
         CONVERSATION_LOG.parent.mkdir(parents=True, exist_ok=True)
         with open(CONVERSATION_LOG, "a") as f:
@@ -288,10 +276,7 @@ async def transcribe_audio(audio_data: np.ndarray) -> Optional[str]:
 
 
 def speak_tts_sync(text: str) -> bool:
-    """Speak text using Kokoro TTS with PCM streaming directly to sounddevice.
-
-    Can be interrupted by setting _tts_interrupt = True.
-    """
+    """Speak text using Kokoro TTS via sounddevice."""
     global _last_tts_text, _last_tts_time, _tts_interrupt
     logger.info("🔊 TTS: %s", text[:80] + "..." if len(text) > 80 else text)
 
@@ -299,72 +284,8 @@ def speak_tts_sync(text: str) -> bool:
     _last_tts_time = time.time()
     _tts_interrupt = False
 
-    stream = None
-    interrupted = False
     try:
         import requests
-
-        stream = sd.OutputStream(
-            device=get_output_device(),
-            samplerate=24000,
-            channels=1,
-            dtype='int16',
-            blocksize=1024,
-            latency='low'
-        )
-        stream.start()
-
-        with requests.post(
-            KOKORO_URL,
-            json={
-                "model": "kokoro",
-                "input": text,
-                "voice": get_voice(),
-                "response_format": "pcm",
-                "stream": True
-            },
-            timeout=60.0,
-            stream=True
-        ) as response:
-            if response.status_code != 200:
-                logger.error("TTS error: HTTP %s", response.status_code)
-                return False
-
-            for chunk in response.iter_content(chunk_size=1024):
-                if _tts_interrupt:
-                    logger.info("🛑 TTS interrupted by user - aborting stream")
-                    interrupted = True
-                    stream.abort()
-                    break
-                if chunk:
-                    audio_array = np.frombuffer(chunk, dtype=np.int16)
-                    stream.write(audio_array)
-
-        if not interrupted:
-            stream.stop()
-            log_conversation("TTS", text)
-        return True
-    except Exception as e:
-        logger.error("TTS error: %s", e)
-        # On PortAudio error, try afplay fallback on macOS
-        if "PortAudio" in str(e) and platform.system() == "Darwin":
-            return _speak_tts_afplay_fallback(text)
-        return False
-    finally:
-        if stream:
-            try:
-                stream.close()
-            except Exception:
-                pass
-        _tts_interrupt = False
-
-
-def _speak_tts_afplay_fallback(text: str) -> bool:
-    """Fallback TTS using afplay on macOS when sounddevice fails (e.g., after device hot-plug)."""
-    import tempfile
-    try:
-        import requests
-        logger.info("🔊 TTS fallback: using afplay")
 
         response = requests.post(
             KOKORO_URL,
@@ -378,19 +299,34 @@ def _speak_tts_afplay_fallback(text: str) -> bool:
         )
 
         if response.status_code != 200:
-            logger.error("TTS fallback error: HTTP %s", response.status_code)
+            logger.error("TTS error: HTTP %s", response.status_code)
             return False
 
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-            f.write(response.content)
-            temp_path = f.name
+        from pydub import AudioSegment
 
-        subprocess.run(["afplay", temp_path], check=True)
-        os.unlink(temp_path)
-        log_conversation("TTS", text)
+        audio = AudioSegment.from_wav(io.BytesIO(response.content))
+        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+        samples = samples / 32768.0
+
+        if audio.channels == 2:
+            samples = samples.reshape((-1, 2))
+        else:
+            samples = samples.reshape((-1, 1))
+
+        sd.play(samples, samplerate=audio.frame_rate)
+        while sd.get_stream().active:
+            if _tts_interrupt:
+                sd.stop()
+                logger.info("🛑 TTS interrupted")
+                break
+            time.sleep(0.05)
+
+        if not _tts_interrupt:
+            log_conversation("TTS", text)
+        _tts_interrupt = False
         return True
     except Exception as e:
-        logger.error("TTS fallback error: %s", e)
+        logger.error("TTS error: %s", e)
         return False
 
 
@@ -629,16 +565,13 @@ def inject_into_app(text: str, log_type: str = None):
 
 def clean_command(text: str) -> str:
     """Clean recorded command text. Removes content BEFORE wake word, Whisper metadata, and anything AFTER stop phrases."""
-    # Remove Whisper sound annotations: [Music], (coughing), ♪, etc.
     cleaned = WHISPER_SOUND_PATTERN.sub('', text).strip()
 
-    # Remove everything BEFORE the wake word (keep wake word + command)
-    # Sort by length descending to match longest wake word first (e.g., "hey samantha" before "samantha")
-    text_lower = cleaned.lower()
     for wake_word in sorted(get_wake_words(), key=len, reverse=True):
-        idx = text_lower.find(wake_word)
-        if idx != -1:
-            cleaned = cleaned[idx:].strip()
+        pattern = r'[^\w]*'.join(re.escape(w) for w in wake_word.split())
+        match = re.search(pattern, cleaned, re.IGNORECASE)
+        if match:
+            cleaned = cleaned[match.start():].strip()
             break
 
     stop_phrases_pattern = r'(stop\s+recording|end\s+recording|finish\s+recording|that\s+is\s+all|that\'s\s+all|thats\s+all|over\s+and\s+out|over\s+out|send\s+message|send\s+it|samantha\s+stop|samantha\s+send|samantha\s+done)'
@@ -663,14 +596,12 @@ async def wait_for_response_and_speak(timeout: float = 30.0) -> bool:
         pass
 
     while time.time() - start_time < timeout:
-        # Check in-memory TTS queue
         with _tts_queue_lock:
             if _tts_text_queue:
                 tts_text = _tts_text_queue.pop(0)
                 await speak_tts(tts_text)
                 return True
 
-        # Monitor clipboard for response
         try:
             result = subprocess.run(["pbpaste"], capture_output=True, text=True)
             current = result.stdout.strip()
@@ -733,11 +664,7 @@ def is_skip_allowed() -> bool:
 
 
 def contains_interrupt_phrase(text: str) -> bool:
-    """Check if text contains an active interrupt word.
-
-    Uses dynamic interrupt words based on current TTS text to avoid
-    the TTS triggering its own interrupt. Expects pre-sanitized text.
-    """
+    """Check if text contains an active interrupt word. Expects pre-sanitized text."""
     if not text:
         return False
 
@@ -779,13 +706,8 @@ def sanitize_whisper_text(text: str) -> str:
     if not text:
         return ""
 
-    # Remove bracketed/parenthesized sounds and musical notes
     cleaned = WHISPER_SOUND_PATTERN.sub('', text)
-
-    # Remove special punctuation but keep apostrophes for contractions
     cleaned = re.sub(r"[^\w\s']", '', cleaned)
-
-    # Collapse whitespace and strip
     cleaned = re.sub(r'\s+', ' ', cleaned).strip().lower()
 
     return cleaned
@@ -796,19 +718,16 @@ def is_noise(text: str) -> bool:
     if not text:
         return True
 
-    # Sanitize Whisper output
     sanitized = sanitize_whisper_text(text)
 
     if not sanitized or len(sanitized) < 3:
         return True
 
-    # If contains any keyword, it's NOT noise (priority check)
     all_keywords = DEFAULT_WAKE_WORDS + STOP_PHRASES + DEFAULT_DEACTIVATION_PHRASES + INTERRUPT_WORDS + SKIP_WORDS
     for keyword in all_keywords:
         if keyword in sanitized:
             return False
 
-    # Check if it's only noise descriptor words
     noise_words = [
         'click', 'clap', 'ding', 'bell', 'tick', 'thud', 'bang',
         'engine', 'revving', 'keyboard', 'typing', 'noise',
@@ -832,11 +751,9 @@ def is_echo(text: str) -> bool:
     text_lower = text.lower().strip()
     tts_lower = _last_tts_text.lower().strip()
 
-    # Direct containment check
     if text_lower in tts_lower or tts_lower in text_lower:
         return True
 
-    # Word overlap check for longer responses
     text_words = set(text_lower.split())
     tts_words = set(tts_lower.split())
     if len(text_words) > 3:
@@ -852,10 +769,18 @@ _tts_start_time = 0
 _tts_interrupt = False
 
 
+MIN_AUDIO_ENERGY = 1500
+
+
 def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
     """Synchronous transcribe for use in thread."""
     try:
         import requests
+
+        max_energy = np.max(np.abs(audio_data))
+        if max_energy < MIN_AUDIO_ENERGY:
+            logger.debug("Audio energy too low (%d < %d), skipping Whisper", max_energy, MIN_AUDIO_ENERGY)
+            return None
 
         audio_data = normalize_audio(audio_data)
         wav_buffer = _prepare_audio_for_whisper(audio_data)
@@ -896,13 +821,13 @@ def samantha_loop_thread():
     MIN_RECORDING_DURATION = 0.3
     INITIAL_SILENCE_GRACE_PERIOD = 1.0
     VAD_SAMPLE_RATE = 16000
-    VAD_AGGRESSIVENESS_LISTENING = 2  # More aggressive filtering when waiting for speech
-    VAD_AGGRESSIVENESS_TTS = 2  # Same aggressiveness during TTS to filter speaker bleed
-    MAX_INACTIVE_AUDIO_MS = 15000  # Max audio buffer when inactive (15 seconds) - prevents unbounded accumulation
+    VAD_AGGRESSIVENESS_LISTENING = 1
+    VAD_AGGRESSIVENESS_TTS = 1
+    MAX_INACTIVE_AUDIO_MS = 15000
 
     chunk_samples = int(SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
     vad_chunk_samples = int(VAD_SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
-    silence_timeout = 1800.0  # 30 minutes
+    silence_timeout = 1800.0
 
     is_active = False
     last_speech_time = 0
@@ -931,7 +856,6 @@ def samantha_loop_thread():
 
             while not _thread_stop_flag:
                 try:
-                    # Process TTS queue if not currently playing
                     tts_text = None
                     if not _tts_playing:
                         with _tts_queue_lock:
@@ -939,25 +863,21 @@ def samantha_loop_thread():
                                 tts_text = _tts_text_queue.pop(0)
 
                     if tts_text:
-                        # Set flags BEFORE starting TTS
                         _tts_playing = True
                         _tts_start_time = time.time()
                         _tts_done_event = threading.Event()
 
-                        # Clear any accumulated audio before TTS
                         _clear_queue(audio_queue)
                         speech_detected = False
                         audio_chunks = []
                         silence_duration_ms = 0
                         recording_start = 0
 
-                        # Start TTS in background thread so we can listen for interrupts
                         done_event = _tts_done_event
                         tts_text_to_speak = tts_text
 
                         def tts_thread_func():
                             global _tts_playing, _last_tts_time, _tts_start_time, _last_tts_text
-                            # Set TTS text BEFORE calculating active words
                             _last_tts_text = tts_text_to_speak
                             active_words = get_active_interrupt_words()
                             logger.info("🎯 Active interrupt words: %s", active_words)
@@ -972,14 +892,11 @@ def samantha_loop_thread():
                         tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
                         tts_thread.start()
 
-                    # While TTS is playing, listen for interrupt trigger words
                     if _tts_playing:
                         try:
                             chunk = audio_queue.get(timeout=0.05)
                             chunk_flat = chunk.flatten()
 
-                            # Check VAD for this chunk - only accumulate if speech detected
-                            # Use less aggressive VAD during TTS to catch interrupts
                             is_speech_chunk = False
                             if vad_tts:
                                 resampled_length = int(len(chunk_flat) * VAD_SAMPLE_RATE / SAMPLE_RATE)
@@ -990,12 +907,9 @@ def samantha_loop_thread():
                                 except Exception:
                                     is_speech_chunk = False
 
-                            # Only accumulate chunks with detected speech
                             if is_speech_chunk:
                                 audio_chunks.append(chunk_flat)
 
-                            # Check for interrupt every 300ms of accumulated speech audio
-                            # Only start checking after 2 seconds to avoid echo from TTS start
                             accumulated_duration_ms = len(audio_chunks) * VAD_CHUNK_DURATION_MS
                             tts_elapsed = time.time() - _tts_start_time if _tts_start_time > 0 else 0
                             if accumulated_duration_ms >= 300 and tts_elapsed >= 2.0:
@@ -1003,13 +917,10 @@ def samantha_loop_thread():
                                 raw_text = transcribe_audio_sync(full_audio)
                                 text = sanitize_whisper_text(raw_text) if raw_text else ""
 
-                                # During TTS, ONLY check for interrupt/skip keywords
-                                # Ignore all other Whisper output (likely hallucinations from speaker bleed)
                                 is_interrupt = text and contains_interrupt_phrase(text)
                                 is_skip = text and contains_skip_phrase(text)
 
                                 if is_interrupt or is_skip:
-                                    # Interrupt takes priority over skip
                                     is_skip_only = is_skip and not is_interrupt
                                     logger.info("🔍 TTS interrupt check: %s", text[:50])
                                     if is_skip_only:
@@ -1018,7 +929,6 @@ def samantha_loop_thread():
                                     else:
                                         logger.info("🛑 Interrupt detected: %s", text[:50])
                                         log_conversation("INTERRUPT", text)
-                                        # Clear the TTS queue on full interrupt (stop/quiet)
                                         with _tts_queue_lock:
                                             _tts_text_queue.clear()
                                     _tts_interrupt = True
@@ -1033,15 +943,12 @@ def samantha_loop_thread():
                                     if is_active:
                                         last_speech_time = time.time()
 
-                                # Reset for next check window
                                 audio_chunks = []
 
                         except queue.Empty:
                             pass
-                        continue  # Skip normal audio processing while TTS is playing
+                        continue
 
-                    # Post-TTS cleanup: clear everything when TTS just finished
-                    # This ensures no hallucinations from TTS bleed leak into normal listening
                     if _last_tts_time > 0:
                         logger.debug("🧹 Post-TTS cleanup: clearing audio queue and buffers")
                         _clear_queue(audio_queue)
@@ -1049,7 +956,7 @@ def samantha_loop_thread():
                         audio_chunks = []
                         silence_duration_ms = 0
                         recording_start = 0
-                        _last_tts_time = 0  # Reset so cleanup only happens once
+                        _last_tts_time = 0
                         if is_active:
                             last_speech_time = time.time()
                         continue
@@ -1069,8 +976,6 @@ def samantha_loop_thread():
                     chunk_flat = chunk.flatten()
                     audio_chunks.append(chunk_flat)
 
-                    # When inactive, trim audio buffer to prevent unbounded accumulation
-                    # Keep only the last MAX_INACTIVE_AUDIO_MS worth of audio
                     if not is_active:
                         max_chunks = MAX_INACTIVE_AUDIO_MS // VAD_CHUNK_DURATION_MS
                         if len(audio_chunks) > max_chunks:
@@ -1106,14 +1011,10 @@ def samantha_loop_thread():
                             if recording_duration >= MIN_RECORDING_DURATION and silence_duration_ms >= SILENCE_THRESHOLD_MS and past_grace_period:
                                 logger.info("✓ Silence threshold reached after %.1fs", recording_duration)
 
-                                # No timestamp-based discard - rely on is_echo() for text filtering
-                                # The audio queue is cleared after TTS, so we shouldn't get echo audio
-
                                 if not _tts_playing and audio_chunks:
                                     full_audio = np.concatenate(audio_chunks)
                                     text = transcribe_audio_sync(full_audio)
 
-                                    # Debug: log what we got and why it might be filtered
                                     if text:
                                         if is_echo(text):
                                             logger.debug("Filtered as echo: %s", text[:50])
@@ -1124,7 +1025,6 @@ def samantha_loop_thread():
                                         logger.info("📝 Heard (active=%s): %s", is_active, text[:100])
 
                                         if is_active:
-                                            # Check for deactivation first
                                             if check_for_deactivation(text):
                                                 logger.info("😴 Deactivating - returning to idle")
                                                 is_active = False
@@ -1340,7 +1240,6 @@ async def samantha_stop() -> str:
 
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
-    # Clear in-memory TTS queue
     with _tts_queue_lock:
         _tts_text_queue.clear()
 
@@ -1412,14 +1311,11 @@ async def samantha_speak(text: str) -> str:
     try:
         _last_tts_text = text
 
-        # Check if Samantha thread is running
         if _samantha_thread and _samantha_thread.is_alive():
-            # Add to in-memory queue - the listening thread will pick it up
             with _tts_queue_lock:
                 _tts_text_queue.append(text)
             return f"🔊 Spoke: {text[:50]}..."
         else:
-            # Samantha not running - speak directly
             logger.info("Samantha not running, speaking directly")
             success = speak_tts_sync(text)
             if success:
@@ -1430,7 +1326,6 @@ async def samantha_speak(text: str) -> str:
         return f"❌ TTS failed: {e}"
 
 
-# Set dynamic docstring based on Theodore mode config at import time
 samantha_speak.__doc__ = _get_samantha_speak_docstring()
 
 

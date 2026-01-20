@@ -183,9 +183,10 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 
 ## 🔬 Technical Details
 
-- **VAD**: WebRTC VAD with aggressiveness level 2 for both listening and interrupt detection
+- **VAD**: WebRTC VAD with aggressiveness level 1 for responsive speech detection
+- **Audio filtering**: Energy threshold (1500) filters low-amplitude noise before Whisper
 - **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
-- **TTS**: Kokoro PCM streaming (local, port 8880)
+- **TTS**: Kokoro via sounddevice (uses system default output)
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
 - **Silence detection**: 1s threshold with 1s initial grace period
 - **Echo prevention**: Audio queue cleared during TTS with text-based filtering
