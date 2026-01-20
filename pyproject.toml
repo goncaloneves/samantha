@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "samantha"
+name = "samantha-voice"
 dynamic = ["version"]
-description = "Samantha - Voice interaction capabilities for AI assistants (formerly voice-mcp)"
+description = "Samantha - Voice assistant for Claude Code with wake word detection, inspired by the movie Her"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Mike Bailey", email = "mike@failmode.com"},
+    {name = "Gonçalo Neves"},
 ]
-keywords = ["mcp", "voice", "livekit", "speech", "tts", "stt", "ai", "llm"]
+keywords = ["mcp", "voice", "speech", "tts", "stt", "ai", "llm", "claude", "samantha", "wake-word"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -95,12 +95,12 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://getvoicemode.com/"
-Repository = "https://github.com/mbailey/voicemode"
-Issues = "https://github.com/mbailey/voicemode/issues"
+Homepage = "https://github.com/goncaloneves/samantha"
+Repository = "https://github.com/goncaloneves/samantha"
+Issues = "https://github.com/goncaloneves/samantha/issues"
 
 [project.scripts]
-samantha = "samantha.server:main"
+samantha-voice = "samantha.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["samantha"]

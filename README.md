@@ -24,10 +24,14 @@ Samantha enables hands-free voice conversations with Claude Code. Say **"Hey Sam
 
 ### Prerequisites
 
-Install local voice services first:
+Install local voice services (Whisper STT + Kokoro TTS):
 ```bash
 uvx voice-mode-install
 ```
+
+This installs and configures:
+- **Whisper** - Local speech-to-text (runs on localhost:2022)
+- **Kokoro** - Local text-to-speech (runs on localhost:8880)
 
 ### Installation
 
