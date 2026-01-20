@@ -745,6 +745,17 @@ def get_active_interrupt_words() -> list:
     return interrupt_words
 
 
+def is_skip_allowed() -> bool:
+    """Check if 'next' skip is allowed based on current TTS text.
+
+    If TTS says "next", don't allow skip detection to avoid self-triggering.
+    """
+    global _last_tts_text
+    if not _last_tts_text:
+        return True
+    return 'next' not in _last_tts_text.lower()
+
+
 def contains_interrupt_phrase(text: str) -> bool:
     """Check if text contains an active interrupt word.
 
@@ -765,8 +776,13 @@ def contains_interrupt_phrase(text: str) -> bool:
 
 
 def contains_skip_phrase(text: str) -> bool:
-    """Check if text contains 'next' to skip to next queued message."""
+    """Check if text contains 'next' to skip to next queued message.
+
+    Only triggers if 'next' is not in the current TTS text (to avoid self-triggering).
+    """
     if not text:
+        return False
+    if not is_skip_allowed():
         return False
     return 'next' in text.lower()
 
