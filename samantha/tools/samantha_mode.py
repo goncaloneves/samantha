@@ -1251,8 +1251,24 @@ async def samantha_stop() -> str:
     return "🛑 Samantha stopped"
 
 
+def get_persona() -> str:
+    """Read persona instructions from CLAUDE.md."""
+    try:
+        claude_md_path = Path(__file__).parent.parent.parent / "CLAUDE.md"
+        if claude_md_path.exists():
+            content = claude_md_path.read_text()
+            start = content.find("## Samantha Persona")
+            if start != -1:
+                end = content.find("---", start)
+                if end != -1:
+                    return content[start:end].strip()
+    except Exception:
+        pass
+    return ""
+
+
 @mcp.tool()
-async def samantha_speak(text: str) -> str:
+async def samantha_speak(text: str, include_persona: bool = True) -> str:
     """Speak text via Samantha TTS.
 
     IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
@@ -1260,9 +1276,10 @@ async def samantha_speak(text: str) -> str:
 
     Args:
         text: Text to speak
+        include_persona: Whether to include persona guidelines in response (default True)
 
     Returns:
-        Status message
+        Status message with persona reminder
     """
     global _last_tts_text, _last_tts_time, _tts_start_time
     try:
@@ -1271,7 +1288,17 @@ async def samantha_speak(text: str) -> str:
 
         # Write to TTS queue file - the listening thread will pick it up and set _tts_playing
         TTS_QUEUE_FILE.write_text(text)
-        return f"🔊 Spoke: {text[:50]}..."
+
+        result = f"🔊 Spoke: {text[:50]}..."
+
+        if include_persona:
+            persona = get_persona()
+            if persona:
+                # Compact single-line reminder - include full persona
+                compact = ' '.join(persona.replace('\n', ' ').replace('  ', ' ').split())
+                result += f" | Persona: {compact}"
+
+        return result
     except Exception as e:
         return f"❌ TTS failed: {e}"
 
