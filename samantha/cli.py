@@ -334,9 +334,7 @@ def cli():
               type=click.Choice(['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3']),
               help='Whisper model to download (default: small)')
 @click.option('--force', is_flag=True, help='Force reinstall even if already installed')
-@click.option('--whisper-only', is_flag=True, help='Only install Whisper STT')
-@click.option('--kokoro-only', is_flag=True, help='Only install Kokoro TTS')
-def install(yes, model, force, whisper_only, kokoro_only):
+def install(yes, model, force):
     """Install Whisper STT and Kokoro TTS services.
 
     This command installs the local voice services required for Samantha:
@@ -345,22 +343,21 @@ def install(yes, model, force, whisper_only, kokoro_only):
     - Whisper (speech-to-text) on port 2022
     - Kokoro (text-to-speech) on port 8880
 
+    Both services are required for Samantha to work.
     The services run locally for privacy and low latency.
 
     \b
     Examples:
-      samantha install              # Install both services
-      samantha install -m small     # Use the 'small' Whisper model
-      samantha install --force      # Reinstall everything
+      samantha-install install              # Install both services
+      samantha-install install -m base      # Use smaller/faster Whisper model
+      samantha-install install --force      # Reinstall everything
     """
     print_logo()
     click.echo()
 
     click.echo("This will install:")
-    if not kokoro_only:
-        click.echo(f"  • Whisper STT (model: {model}) - localhost:2022")
-    if not whisper_only:
-        click.echo("  • Kokoro TTS - localhost:8880")
+    click.echo(f"  • Whisper STT (model: {model}) - localhost:2022")
+    click.echo("  • Kokoro TTS - localhost:8880")
     click.echo()
 
     if not yes:
@@ -371,33 +368,31 @@ def install(yes, model, force, whisper_only, kokoro_only):
     click.echo()
     success = True
 
-    if not kokoro_only:
-        try:
-            if not install_whisper(model=model, force=force):
-                success = False
-        except subprocess.CalledProcessError as e:
-            print_error(f"Whisper installation failed: {e}")
+    try:
+        if not install_whisper(model=model, force=force):
             success = False
-        except Exception as e:
-            print_error(f"Whisper installation error: {e}")
-            success = False
+    except subprocess.CalledProcessError as e:
+        print_error(f"Whisper installation failed: {e}")
+        success = False
+    except Exception as e:
+        print_error(f"Whisper installation error: {e}")
+        success = False
 
     click.echo()
 
-    if not whisper_only:
-        try:
-            if not install_kokoro(force=force):
-                success = False
-        except subprocess.CalledProcessError as e:
-            print_error(f"Kokoro installation failed: {e}")
+    try:
+        if not install_kokoro(force=force):
             success = False
-        except Exception as e:
-            print_error(f"Kokoro installation error: {e}")
-            success = False
+    except subprocess.CalledProcessError as e:
+        print_error(f"Kokoro installation failed: {e}")
+        success = False
+    except Exception as e:
+        print_error(f"Kokoro installation error: {e}")
+        success = False
 
     click.echo()
 
-    if platform.system() == "Darwin" and not kokoro_only:
+    if platform.system() == "Darwin":
         whisper_script = create_whisper_start_script()
         setup_launchd_service("whisper", whisper_script, 2022)
 
@@ -409,11 +404,9 @@ def install(yes, model, force, whisper_only, kokoro_only):
         click.echo("━" * 50)
         click.echo()
         click.echo("Start services manually:")
-        if not kokoro_only:
-            click.echo(f"  Whisper: {WHISPER_DIR}/bin/start-whisper-server.sh")
-        if not whisper_only:
-            script = "start-gpu_mac.sh" if platform.system() == "Darwin" else "start-cpu.sh"
-            click.echo(f"  Kokoro:  cd {KOKORO_DIR} && ./{script}")
+        click.echo(f"  Whisper: {WHISPER_DIR}/bin/start-whisper-server.sh")
+        script = "start-gpu_mac.sh" if platform.system() == "Darwin" else "start-cpu.sh"
+        click.echo(f"  Kokoro:  cd {KOKORO_DIR} && ./{script}")
         click.echo()
         click.echo("Or on macOS, enable as services:")
         click.echo("  launchctl load ~/Library/LaunchAgents/com.samantha.whisper.plist")

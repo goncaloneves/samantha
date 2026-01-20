@@ -51,7 +51,6 @@ Options:
 ```bash
 samantha-install install -m base      # Use smaller/faster Whisper model (142MB)
 samantha-install install --force      # Reinstall everything
-samantha-install install --whisper-only  # Only install Whisper
 ```
 
 ### Add to Claude Code
@@ -146,21 +145,18 @@ Available voices: `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_
 
 ### Whisper Model Selection
 
-For better transcription accuracy, use the `small` model:
+The default model is `small` (466MB) which provides good accuracy. To download additional models:
 
 ```bash
-cd ~/.voicemode/services/whisper/models
-./download-ggml-model.sh small
-
-# Configure in ~/.voicemode/voicemode.env
-VOICEMODE_WHISPER_MODEL=small
+samantha-install download-model base    # Smaller/faster (142MB)
+samantha-install download-model medium  # Better accuracy (1.5GB)
 ```
 
 | Model | Size | Accuracy | Speed |
 |-------|------|----------|-------|
 | tiny | 74MB | Low | Fast |
-| base | 141MB | Medium | Fast |
-| **small** | **466MB** | **Good** | **Balanced** |
+| base | 142MB | Medium | Fast |
+| **small** | **466MB** | **Good (default)** | **Balanced** |
 | medium | 1.5GB | Better | Slower |
 | large | 3GB | Best | Slowest |
 
