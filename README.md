@@ -49,7 +49,7 @@ pip install -e .
 
 Then add to Claude Code:
 ```bash
-claude mcp add samantha-voice -- samantha-voice
+claude mcp add samantha -- samantha
 ```
 
 ## 📖 How It Works

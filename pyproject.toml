@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "samantha-voice"
+name = "samantha"
 dynamic = ["version"]
 description = "Samantha - Voice assistant for Claude Code with wake word detection, inspired by the movie Her"
 readme = "README.md"
@@ -100,7 +100,7 @@ Repository = "https://github.com/goncaloneves/samantha"
 Issues = "https://github.com/goncaloneves/samantha/issues"
 
 [project.scripts]
-samantha-voice = "samantha.server:main"
+samantha = "samantha.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["samantha"]
