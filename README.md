@@ -197,6 +197,8 @@ When you speak to Samantha, your voice is transcribed and "injected" into the ta
                                           xclip              to focus              Return
 ```
 
+> **Important**: Make sure your cursor is in the input field where you want the text to appear before speaking. The paste will go wherever your cursor was last focused in the target app.
+
 This clipboard-based approach works reliably across all supported apps without requiring app-specific APIs.
 
 ## 📄 License
