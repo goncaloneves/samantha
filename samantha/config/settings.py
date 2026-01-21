@@ -133,12 +133,12 @@ def get_target_app() -> str | None:
 def get_injection_mode() -> str:
     """Get injection mode: 'extension' or 'cli'.
 
-    - extension (default): Use Cmd+Escape to focus Claude Code extension input
-    - cli: Focus IDE's integrated terminal (Ctrl+`) for Claude CLI usage
+    - cli (default): Focus IDE's integrated terminal (Ctrl+`) for Claude CLI usage
+    - extension: Use Cmd+Escape to focus Claude Code extension input
 
-    Returns 'extension' by default.
+    Returns 'cli' by default.
     """
-    val = get_config("injection_mode", "extension")
+    val = get_config("injection_mode", "cli")
     if isinstance(val, str) and val.strip().lower() in ("extension", "cli"):
         return val.strip().lower()
-    return "extension"
+    return "cli"

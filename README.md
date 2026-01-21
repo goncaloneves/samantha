@@ -125,7 +125,7 @@ Create `~/.samantha/config.json` to customize:
   "restore_focus": true,
   "min_audio_energy": 3000,
   "target_app": null,
-  "injection_mode": "extension"
+  "injection_mode": "cli"
 }
 ```
 
@@ -141,7 +141,7 @@ Create `~/.samantha/config.json` to customize:
 | `restore_focus` | Return to your previous app after injection | `true` |
 | `min_audio_energy` | Audio threshold to filter background noise | `3000` |
 | `target_app` | Force injection into a specific app (e.g., `Cursor`, `Terminal`) | Auto-detect |
-| `injection_mode` | `extension` for Claude Code extension, `cli` for integrated terminal | `extension` |
+| `injection_mode` | `cli` for integrated terminal, `extension` for Claude Code extension | `cli` |
 | `input_device` | Microphone device index | System default |
 | `output_device` | Speaker device index | System default |
 
@@ -195,12 +195,12 @@ Configure where Samantha injects your voice commands in `~/.samantha/config.json
 
 #### Option 1: Auto-detect (Default)
 
-Leave `target_app` unset or `null`. Samantha will find the first running IDE with Claude, or fall back to a terminal.
+Leave `target_app` unset or `null`. Samantha will find the first running IDE with Claude CLI in terminal, or fall back to a standalone terminal.
 
 ```json
 {
   "target_app": null,
-  "injection_mode": "extension"
+  "injection_mode": "cli"
 }
 ```
 
@@ -211,7 +211,7 @@ Set `target_app` to always inject into a specific app:
 ```json
 {
   "target_app": "Cursor",
-  "injection_mode": "extension"
+  "injection_mode": "cli"
 }
 ```
 
@@ -232,25 +232,25 @@ Set `target_app` to always inject into a specific app:
 | `CLion` | `PowerShell` |
 | `DataGrip` | `cmd` |
 
-#### Option 3: CLI Mode (Claude in Integrated Terminal)
+#### Option 3: Extension Mode (Claude Code Extension)
 
-If you run Claude CLI in your IDE's integrated terminal instead of the extension:
+If you use the Claude Code extension panel instead of CLI in terminal:
 
 ```json
 {
   "target_app": "Cursor",
-  "injection_mode": "cli"
+  "injection_mode": "extension"
 }
 ```
 
-This focuses the IDE's terminal (`Ctrl+`` shortcut) instead of the Claude Code extension panel.
+This focuses the Claude Code extension panel (`Cmd+Escape` shortcut) instead of the integrated terminal.
 
 ### Injection Modes
 
 | Mode | Default | Shortcut | Use When |
 |------|---------|----------|----------|
-| `extension` | Yes | `Cmd+Escape` | Using Claude Code extension in IDE |
-| `cli` | No | `Ctrl+`` | Running Claude CLI in IDE's integrated terminal |
+| `cli` | Yes | `Ctrl+`` | Running Claude CLI in IDE's integrated terminal |
+| `extension` | No | `Cmd+Escape` | Using Claude Code extension in IDE |
 
 **Note:** Samantha verifies Claude is actually running before injecting. If Claude isn't found in the target app, injection will fail gracefully.
 
