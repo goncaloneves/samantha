@@ -19,7 +19,6 @@ from samantha.config import (
     CHANNELS,
     VOICE_MESSAGE_PREFIX,
     get_input_device,
-    get_show_status,
 )
 from samantha.audio.recording import _clear_queue
 import samantha.audio.playback as playback
@@ -179,11 +178,10 @@ def samantha_loop_thread():
                                     playback._tts_playing = False
                                     time.sleep(0.1)
                                     _clear_queue(audio_queue)
-                                    if get_show_status():
-                                        if is_skip_only:
-                                            inject_into_app("<!-- ⏭️ [Skipped to next] -->")
-                                        else:
-                                            inject_into_app("<!-- 🤫 [Speech interrupted] -->")
+                                    if is_skip_only:
+                                        playback.play_sound("skip")
+                                    else:
+                                        playback.play_sound("stop")
                                     if is_active:
                                         last_speech_time = time.time()
 
@@ -210,7 +208,7 @@ def samantha_loop_thread():
                         if silence_elapsed > silence_timeout:
                             logger.info("⏰ 30min silence - returning to idle")
                             is_active = False
-                            playback.play_chime()
+                            playback.play_sound("timeout")
 
                     try:
                         chunk = audio_queue.get(timeout=0.1)
@@ -272,9 +270,7 @@ def samantha_loop_thread():
                                             if check_for_deactivation(text):
                                                 logger.info("😴 Deactivating - returning to idle")
                                                 is_active = False
-                                                playback.play_goodbye_chime()
-                                                if get_show_status():
-                                                    inject_into_app("<!-- 😴 [Samantha deactivated] -->")
+                                                playback.play_sound("deactivate")
                                             else:
                                                 logger.info("🟢 Active - sending to Claude")
                                                 last_speech_time = time.time()
@@ -286,9 +282,7 @@ def samantha_loop_thread():
                                             logger.info("✨ Activated!")
                                             is_active = True
                                             last_speech_time = time.time()
-                                            playback.play_chime()
-                                            if get_show_status():
-                                                inject_into_app("<!-- 👋 [Samantha activated] -->")
+                                            playback.play_sound("activate")
                                             cleaned = clean_command(text)
                                             if cleaned:
                                                 log_conversation("STT", cleaned)

@@ -16,8 +16,7 @@ from .playback import (
     _tts_interrupt,
     speak_tts_sync,
     speak_tts,
-    play_chime,
-    play_goodbye_chime,
+    play_sound,
 )
 
 from .processing import (
@@ -44,8 +43,7 @@ __all__ = [
     # Playback functions
     "speak_tts_sync",
     "speak_tts",
-    "play_chime",
-    "play_goodbye_chime",
+    "play_sound",
     # Processing
     "is_echo",
     "get_active_interrupt_words",

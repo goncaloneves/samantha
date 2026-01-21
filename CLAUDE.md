@@ -51,11 +51,12 @@ samantha                   # Run MCP server
 
 ## Voice Interaction Flow
 
-1. **Idle** → User says "Hey Samantha" → **Active** (plays activation chime)
+1. **Idle** → User says "Hey Samantha" → **Active** (plays Funky chime)
 2. **Active** → All speech sent to AI with `[🎙️ Voice - samantha_speak]` prefix
-3. **Active** → User says "Samantha sleep" → **Idle** (plays deactivation chime)
-4. **During TTS** → User says "skip" or "continue" → Skip to next queued message
-5. **During TTS** → User says "stop" or "quiet" → TTS interrupted and queue cleared
+3. **Active** → User says "Samantha sleep" → **Idle** (plays Pebble chime)
+4. **During TTS** → User says "skip" or "continue" → Skip to next queued message (plays Breeze chime)
+5. **During TTS** → User says "stop" or "quiet" → TTS interrupted and queue cleared (plays Bubble chime)
+6. **Active** → 30 minutes of silence → **Idle** (plays Submerge chime)
 
 ## Configuration
 
@@ -68,7 +69,6 @@ Create `~/.samantha/config.json` for easy customization:
   "voice": "af_aoede",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
-  "show_status": true,
   "theodore": true,
   "restore_focus": true,
   "min_audio_energy": 3000,
@@ -88,7 +88,6 @@ Config file values take precedence over environment variables.
 | `SAMANTHA_VOICE` | Kokoro TTS voice | `af_aoede` |
 | `SAMANTHA_WAKE_WORDS` | Activation phrases | `hey samantha,samantha,...` |
 | `SAMANTHA_DEACTIVATION_WORDS` | Deactivation phrases | `samantha sleep,goodbye samantha,...` |
-| `SAMANTHA_SHOW_STATUS` | Show status messages in chat | `true` |
 | `SAMANTHA_THEODORE` | Call user "Theodore" like in the movie | `true` |
 | `SAMANTHA_RESTORE_FOCUS` | Return to previous app after injection | `true` |
 | `SAMANTHA_MIN_AUDIO_ENERGY` | Audio threshold for noise filtering | `3000` |

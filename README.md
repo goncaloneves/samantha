@@ -123,7 +123,6 @@ Create `~/.samantha/config.json` to customize:
   "voice": "af_aoede",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
-  "show_status": true,
   "theodore": true,
   "restore_focus": true,
   "min_audio_energy": 3000,
@@ -141,7 +140,6 @@ Create `~/.samantha/config.json` to customize:
 | `voice` | TTS voice to use | `af_aoede` |
 | `wake_words` | Phrases that activate Samantha | `hey samantha`, `samantha` |
 | `deactivation_words` | Phrases that put Samantha to sleep | `samantha sleep`, `goodbye samantha` |
-| `show_status` | Announce when activated/deactivated | `true` |
 | `theodore` | Call you "Theodore" like in the movie | `true` |
 | `restore_focus` | Return to your previous app after injection | `true` |
 | `min_audio_energy` | Audio threshold to filter background noise | `3000` |

@@ -59,13 +59,6 @@ def get_output_device():
     return None
 
 
-def get_show_status() -> bool:
-    val = get_config("show_status", "true")
-    if isinstance(val, bool):
-        return val
-    return str(val).lower() == "true"
-
-
 def get_restore_focus() -> bool:
     val = get_config("restore_focus", "true")
     if isinstance(val, bool):

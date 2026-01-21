@@ -98,51 +98,62 @@ async def speak_tts(text: str) -> bool:
     return speak_tts_sync(text)
 
 
-def play_chime():
-    """Play activation chime sound (cross-platform)."""
-    if platform.system() == "Darwin":
-        subprocess.Popen(
-            ["afplay", "/System/Library/Sounds/Glass.aiff"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-    elif platform.system() == "Linux":
-        for player in ["paplay", "pw-play", "aplay"]:
-            if shutil.which(player):
-                subprocess.Popen(
-                    [player, "/usr/share/sounds/freedesktop/stereo/service-login.oga"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                break
-    elif platform.system() == "Windows":
-        try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)
-        except Exception:
-            pass
+SOUNDS_DARWIN = {
+    "activate": "/System/Library/Sounds/Funk.aiff",
+    "deactivate": "/System/Library/Sounds/Bottle.aiff",
+    "skip": "/System/Library/Sounds/Blow.aiff",
+    "stop": "/System/Library/Sounds/Pop.aiff",
+    "timeout": "/System/Library/Sounds/Submarine.aiff",
+}
+
+SOUNDS_LINUX = {
+    "activate": "/usr/share/sounds/freedesktop/stereo/message.oga",
+    "deactivate": "/usr/share/sounds/freedesktop/stereo/device-removed.oga",
+    "skip": "/usr/share/sounds/freedesktop/stereo/dialog-information.oga",
+    "stop": "/usr/share/sounds/freedesktop/stereo/dialog-warning.oga",
+    "timeout": "/usr/share/sounds/freedesktop/stereo/power-unplug.oga",
+}
 
 
-def play_goodbye_chime():
-    """Play deactivation chime sound (cross-platform)."""
-    if platform.system() == "Darwin":
-        subprocess.Popen(
-            ["afplay", "/System/Library/Sounds/Submarine.aiff"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-    elif platform.system() == "Linux":
-        for player in ["paplay", "pw-play", "aplay"]:
-            if shutil.which(player):
-                subprocess.Popen(
-                    [player, "/usr/share/sounds/freedesktop/stereo/service-logout.oga"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                break
-    elif platform.system() == "Windows":
+def play_sound(sound_type: str):
+    """Play a sound effect (cross-platform).
+
+    Args:
+        sound_type: One of "activate", "deactivate", "skip", "stop", "timeout"
+    """
+    system = platform.system()
+
+    if system == "Darwin":
+        sound_file = SOUNDS_DARWIN.get(sound_type)
+        if sound_file:
+            subprocess.Popen(
+                ["afplay", sound_file],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+    elif system == "Linux":
+        sound_file = SOUNDS_LINUX.get(sound_type)
+        if sound_file:
+            for player in ["paplay", "pw-play", "aplay"]:
+                if shutil.which(player):
+                    subprocess.Popen(
+                        [player, sound_file],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    break
+    elif system == "Windows":
         try:
             import winsound
-            winsound.MessageBeep(winsound.MB_ICONHAND)
+            sounds_win = {
+                "activate": winsound.MB_ICONASTERISK,
+                "deactivate": winsound.MB_OK,
+                "skip": winsound.MB_ICONQUESTION,
+                "stop": winsound.MB_ICONEXCLAMATION,
+                "timeout": winsound.MB_ICONHAND,
+            }
+            beep_type = sounds_win.get(sound_type)
+            if beep_type is not None:
+                winsound.MessageBeep(beep_type)
         except Exception:
             pass
