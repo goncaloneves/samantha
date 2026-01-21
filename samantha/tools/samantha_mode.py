@@ -1230,7 +1230,7 @@ async def samantha_start() -> str:
         _thread_stop_flag = True
         return "❌ Samantha failed to start - audio stream not ready after 30 seconds. Please try again."
 
-    return "🎧 Samantha started. Say 'Hey Samantha' to activate. Say 'that's all' to send message, 'Samantha sleep' to deactivate. Say 'skip' for next message, or 'stop'/'quiet' to interrupt."
+    return "🎧 Samantha started. Say 'Hey Samantha' to activate, 'Samantha sleep' to deactivate. During TTS: 'skip' for next, 'stop' to interrupt."
 
 
 @mcp.tool()
