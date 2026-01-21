@@ -184,13 +184,13 @@ samantha-install download-model medium  # Better accuracy (1.5GB)
 
 ### Supported Apps
 
-**IDE**: Cursor (with Claude Code extension)
+**IDEs** (with Claude Code extension): Cursor, VS Code, VS Code Insiders, VSCodium, Windsurf
 
 **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, gnome-terminal, konsole, xfce4-terminal, xterm, Windows Terminal, PowerShell, cmd
 
 ### Smart Injection
 
-Samantha tries Cursor first (using Cmd/Ctrl+Escape to focus Claude input), then falls back to terminal. After injection, it restores focus to your previous app (configurable via `restore_focus`).
+Samantha tries IDEs first (using Cmd/Ctrl+Escape to focus Claude input), then falls back to terminal. After injection, it restores focus to your previous app (configurable via `restore_focus`).
 
 ## 🔬 Technical Details
 

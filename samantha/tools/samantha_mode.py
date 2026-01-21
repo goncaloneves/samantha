@@ -3,9 +3,9 @@
 Fully integrated voice mode that handles:
 1. Wake word detection via Whisper STT
 2. Voice command recording
-3. Command injection into Cursor/Claude
+3. Command injection into IDE (Cursor, VS Code, etc.) or Terminal
 4. Response capture and TTS via Kokoro
-5. Conversation logging (STT/TTS) in Cursor
+5. Conversation logging (STT/TTS) in target app
 
 No dependency on converse or other samantha tools.
 """
@@ -150,7 +150,16 @@ SKIP_WORDS = ['continue', 'skip']
 
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
-SUPPORTED_APPS = ["Cursor", "Claude", "Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty"]
+# IDEs with Claude Code extension support (Cmd/Ctrl+Escape focuses Claude input)
+SUPPORTED_IDES = ["Cursor", "Code", "Visual Studio Code", "VSCodium", "Windsurf"]
+# Process names vary by platform - these are used for detection
+IDE_PROCESS_NAMES = {
+    "Darwin": ["Cursor", "Code", "Code - Insiders", "VSCodium", "Windsurf"],
+    "Linux": ["cursor", "code", "code-insiders", "vscodium", "windsurf"],
+    "Windows": ["Cursor", "Code", "Code - Insiders", "VSCodium", "Windsurf"],
+}
+SUPPORTED_TERMINALS = ["Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
+SUPPORTED_APPS = SUPPORTED_IDES + ["Claude"] + SUPPORTED_TERMINALS
 
 _samantha_thread = None
 _thread_stop_flag = False
@@ -633,55 +642,82 @@ def kill_orphaned_processes():
         logger.debug("Cleanup check failed: %s", e)
 
 
-def is_cursor_available() -> bool:
-    """Check if Cursor is running and has windows open (cross-platform)."""
+def get_running_ide() -> str | None:
+    """Find which supported IDE is running with windows open (cross-platform).
+
+    Returns the IDE name if found, None otherwise.
+    """
+    ide_names = IDE_PROCESS_NAMES.get(PLATFORM, [])
+
     try:
         if PLATFORM == "Darwin":
-            result = subprocess.run(
-                ["osascript", "-e", 'tell application "System Events" to tell process "Cursor" to get (count of windows)'],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode != 0:
-                return False
-            window_count = int(result.stdout.strip())
-            return window_count > 0
+            for ide in ide_names:
+                try:
+                    result = subprocess.run(
+                        ["osascript", "-e", f'tell application "System Events" to tell process "{ide}" to get (count of windows)'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        window_count = int(result.stdout.strip())
+                        if window_count > 0:
+                            logger.debug("Found IDE: %s with %d windows", ide, window_count)
+                            return ide
+                except (ValueError, subprocess.TimeoutExpired):
+                    continue
+            return None
         elif PLATFORM == "Linux":
             if shutil.which("xdotool"):
-                result = subprocess.run(
-                    ["xdotool", "search", "--name", "Cursor"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    return True
+                for ide in ide_names:
+                    result = subprocess.run(
+                        ["xdotool", "search", "--name", ide],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        logger.debug("Found IDE via xdotool: %s", ide)
+                        return ide
             if shutil.which("wmctrl"):
                 result = subprocess.run(
                     ["wmctrl", "-l"],
                     capture_output=True, text=True, timeout=5
                 )
-                if result.returncode == 0 and "Cursor" in result.stdout:
-                    return True
-            return False
+                if result.returncode == 0:
+                    for ide in ide_names:
+                        if ide.lower() in result.stdout.lower():
+                            logger.debug("Found IDE via wmctrl: %s", ide)
+                            return ide
+            return None
         elif PLATFORM == "Windows":
             try:
                 import pygetwindow as gw
-                windows = gw.getWindowsWithTitle("Cursor")
-                return len(windows) > 0
+                for ide in ide_names:
+                    windows = gw.getWindowsWithTitle(ide)
+                    if len(windows) > 0:
+                        logger.debug("Found IDE via pygetwindow: %s", ide)
+                        return ide
             except ImportError:
                 pass
-            try:
-                result = subprocess.run(
-                    ["powershell", "-Command", "Get-Process -Name Cursor -ErrorAction SilentlyContinue"],
-                    capture_output=True, text=True, timeout=5
-                )
-                return result.returncode == 0 and result.stdout.strip() != ""
-            except Exception:
-                pass
-            return False
+            for ide in ide_names:
+                try:
+                    result = subprocess.run(
+                        ["powershell", "-Command", f"Get-Process -Name '{ide}' -ErrorAction SilentlyContinue"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        logger.debug("Found IDE via PowerShell: %s", ide)
+                        return ide
+                except Exception:
+                    continue
+            return None
         else:
-            return False
+            return None
     except Exception as e:
-        logger.debug("Cursor detection failed: %s", e)
-        return False
+        logger.debug("IDE detection failed: %s", e)
+        return None
+
+
+def is_ide_available() -> bool:
+    """Check if any supported IDE is running with windows open."""
+    return get_running_ide() is not None
 
 
 def is_claude_process_running() -> bool:
@@ -708,14 +744,15 @@ def is_claude_process_running() -> bool:
         return False
 
 
-def focus_cursor_claude_input() -> bool:
-    """Focus Cursor's Claude input field using Cmd/Ctrl+Escape (cross-platform).
+def focus_ide_claude_input(ide_name: str) -> bool:
+    """Focus IDE's Claude input field using Cmd/Ctrl+Escape (cross-platform).
 
-    This shortcut toggles focus between the editor and Claude's prompt box in Cursor.
+    This shortcut toggles focus between the editor and Claude's prompt box.
+    Works with Cursor, VS Code, VSCodium, and other IDEs with Claude Code extension.
     """
     try:
         if PLATFORM == "Darwin":
-            activate_app("Cursor")
+            activate_app(ide_name)
             time.sleep(0.3)
             subprocess.run(
                 ["osascript", "-e", 'tell application "System Events" to key code 53 using command down'],
@@ -724,7 +761,7 @@ def focus_cursor_claude_input() -> bool:
             time.sleep(0.2)
             return True
         elif PLATFORM == "Linux":
-            activate_app("Cursor")
+            activate_app(ide_name)
             time.sleep(0.3)
             if shutil.which("xdotool"):
                 subprocess.run(
@@ -742,7 +779,7 @@ def focus_cursor_claude_input() -> bool:
                 return True
             return False
         elif PLATFORM == "Windows":
-            activate_app("Cursor")
+            activate_app(ide_name)
             time.sleep(0.3)
             try:
                 import pyautogui
@@ -765,40 +802,41 @@ def focus_cursor_claude_input() -> bool:
         else:
             return False
     except Exception as e:
-        logger.debug("Focus Cursor Claude input failed: %s", e)
+        logger.debug("Focus %s Claude input failed: %s", ide_name, e)
         return False
 
 
-def inject_into_cursor(text: str) -> bool:
-    """Inject text into Cursor's Claude input field.
+def inject_into_ide(text: str) -> bool:
+    """Inject text into IDE's Claude input field (Cursor, VS Code, etc.).
 
     Returns True if injection succeeded, False otherwise.
     """
-    if not is_cursor_available():
-        logger.debug("Cursor not available (no windows)")
+    ide_name = get_running_ide()
+    if not ide_name:
+        logger.debug("No supported IDE available")
         return False
 
     if not is_claude_process_running():
         logger.debug("Claude process not running")
         return False
 
-    logger.info("💉 Injecting into Cursor: %s", text[:50])
+    logger.info("💉 Injecting into %s: %s", ide_name, text[:50])
 
     if not copy_to_clipboard(text):
         logger.error("Failed to copy to clipboard")
         return False
 
-    if not focus_cursor_claude_input():
-        logger.warning("Failed to focus Cursor Claude input")
+    if not focus_ide_claude_input(ide_name):
+        logger.warning("Failed to focus %s Claude input", ide_name)
         return False
 
     time.sleep(0.2)
 
     if simulate_paste_and_enter():
-        logger.info("✅ Injected into Cursor")
+        logger.info("✅ Injected into %s", ide_name)
         return True
     else:
-        logger.error("Paste failed in Cursor")
+        logger.error("Paste failed in %s", ide_name)
         return False
 
 
@@ -1018,20 +1056,24 @@ def inject_into_terminal(text: str) -> bool:
 
 
 def inject_into_app(text: str, log_type: str = None):
-    """Inject text into Cursor or terminal (with fallback).
+    """Inject text into IDE or terminal (with fallback).
 
-    Tries Cursor first (if available), then falls back to terminal.
+    Tries IDE first (Cursor, VS Code, etc.), then falls back to terminal.
     Captures frontmost app right before injection and restores focus after.
     """
     previous_app = get_frontmost_app() if get_restore_focus() else None
 
     success = False
     target_app = None
-    if inject_into_cursor(text):
+    ide_name = get_running_ide()
+    if ide_name and inject_into_ide(text):
         success = True
-        target_app = "Cursor"
+        target_app = ide_name
     else:
-        logger.info("Cursor injection failed, falling back to terminal")
+        if ide_name:
+            logger.info("%s injection failed, falling back to terminal", ide_name)
+        else:
+            logger.debug("No IDE found, trying terminal")
         if inject_into_terminal(text):
             success = True
             target_app = "Terminal"
@@ -1042,7 +1084,7 @@ def inject_into_app(text: str, log_type: str = None):
         try:
             global _tts_text_queue, _tts_queue_lock
             with _tts_queue_lock:
-                _tts_text_queue.append("I couldn't find Claude running in Cursor or Terminal. Please make sure Claude is open.")
+                _tts_text_queue.append("I couldn't find Claude running in any IDE or Terminal. Please make sure Claude is open.")
         except Exception:
             pass
         return
@@ -1522,7 +1564,7 @@ def samantha_loop_thread():
                                                 if get_show_status():
                                                     inject_into_app("<!-- 😴 [Samantha deactivated] -->")
                                             else:
-                                                logger.info("🟢 Active - sending to Cursor")
+                                                logger.info("🟢 Active - sending to Claude")
                                                 last_speech_time = time.time()
                                                 cleaned = clean_command(text)
                                                 if cleaned:
