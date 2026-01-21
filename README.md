@@ -62,8 +62,8 @@ Once activated, Samantha stays active and listens for your next message. You don
 | Say this... | To do this... |
 |-------------|---------------|
 | *"that's all"* or *"send it"* | Send your message immediately (without waiting for silence) |
-| *"skip"* or *"continue"* | Skip to the next part of a long response |
-| *"stop"* or *"quiet"* | Stop speaking and cancel any remaining response |
+| *"skip"* or *"continue"* | Stop current message (queued messages still play) |
+| *"stop"* or *"quiet"* | Stop speaking and clear all queued messages |
 
 ### Ending a Conversation
 
@@ -80,8 +80,8 @@ Once activated, Samantha stays active and listens for your next message. You don
 /samantha:start              # Start voice mode (begin listening)
 "Hey Samantha, ..."          # Activate and speak
 "that's all"                 # Send message immediately
-"skip"                       # Skip current TTS segment
-"stop"                       # Stop TTS completely
+"skip"                       # Stop current message, continue with queue
+"stop"                       # Stop all speaking, clear queue
 "Samantha sleep"             # Go idle (still listening for wake word)
 /samantha:stop               # Stop voice mode completely
 ```
