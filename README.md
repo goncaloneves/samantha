@@ -292,9 +292,9 @@ Set `target_app` to always inject into a specific app:
 | `CLion` | `PowerShell` |
 | `DataGrip` | `cmd` |
 
-#### Option 3: Extension Mode (Claude Code Extension)
+#### Option 3: Extension Mode (AI Extension Panel)
 
-If you use the Claude Code extension panel instead of CLI in terminal:
+If you use an AI extension panel (like Claude Code) instead of CLI in terminal:
 
 ```json
 {
@@ -303,7 +303,7 @@ If you use the Claude Code extension panel instead of CLI in terminal:
 }
 ```
 
-This focuses the Claude Code extension panel (`Cmd+Escape` shortcut) instead of the integrated terminal.
+This focuses the AI extension panel (`Cmd+Escape` shortcut) instead of the integrated terminal.
 
 ### Injection Modes
 
