@@ -205,7 +205,10 @@ For developers integrating Samantha:
 When you speak to Samantha, your voice is transcribed and "injected" into Claude Code as if you typed it:
 
 ```
-🎙️ Mic → Whisper → Clipboard → Activate App → Paste + Enter → Restore Focus
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   🎙️ Mic    │────▶│  Whisper    │────▶│  Clipboard  │────▶│  Activate   │────▶│   Paste +   │────▶│  Restore    │
+│   Record    │     │  Transcribe │     │    Copy     │     │  Target App │     │    Enter    │     │    Focus    │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
 For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
