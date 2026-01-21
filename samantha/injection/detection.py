@@ -129,6 +129,21 @@ def activate_app(app_name: str) -> bool:
         return False
 
 
+def is_samantha_running_elsewhere() -> bool:
+    """Check if another Samantha process is running (not in this process)."""
+    try:
+        our_pid = os.getpid()
+        result = subprocess.run(["pgrep", "-f", "samantha"], capture_output=True, text=True, timeout=5)
+        if result.stdout.strip():
+            for pid in result.stdout.strip().split('\n'):
+                pid = int(pid.strip())
+                if pid != our_pid:
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 def kill_orphaned_processes():
     """Kill any orphaned samantha processes from previous sessions."""
     try:

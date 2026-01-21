@@ -60,13 +60,24 @@ def is_skip_allowed() -> bool:
 
 
 def contains_interrupt_phrase(text: str) -> bool:
-    """Check if text contains an active interrupt word. Expects pre-sanitized text."""
+    """Check if text contains an active interrupt word. Expects pre-sanitized text.
+
+    If a word appears twice (e.g., "stop stop"), it always works as an interrupt,
+    even if that word is in the TTS text. This ensures users can always interrupt.
+    """
     if not text:
         return False
 
+    words = text.split()
+
+    for word in INTERRUPT_WORDS:
+        word_count = words.count(word)
+        if word_count >= 2:
+            return True
+
     active_words = get_active_interrupt_words()
     for word in active_words:
-        if word in text.split():
+        if word in words:
             return True
     return False
 

@@ -13,7 +13,7 @@ from samantha.config import (
     get_theodore_mode,
 )
 import samantha.audio.playback as playback
-from samantha.injection.detection import kill_orphaned_processes
+from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere
 from samantha.services.health import ensure_kokoro_running, ensure_whisper_running
 from samantha.core.loop import samantha_loop_thread
 import samantha.core.state as state
@@ -37,10 +37,15 @@ async def samantha_start() -> str:
     Returns:
         Status message
     """
-    if state._samantha_thread and state._samantha_thread.is_alive():
-        return "Samantha is already running"
+    already_running = (
+        (state._samantha_thread and state._samantha_thread.is_alive())
+        or is_samantha_running_elsewhere()
+    )
+    if already_running:
+        return "🎧 Samantha is already running. Use /samantha:stop to stop it."
 
-    kill_orphaned_processes()
+    if SAMANTHA_ACTIVE_FILE.exists():
+        SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
     SAMANTHA_DIR.mkdir(parents=True, exist_ok=True)
     SAMANTHA_ACTIVE_FILE.touch()
@@ -49,8 +54,10 @@ async def samantha_start() -> str:
     whisper_ok = await ensure_whisper_running()
 
     if not kokoro_ok:
+        SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
         return "❌ Failed to start Kokoro TTS service"
     if not whisper_ok:
+        SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
         return "❌ Failed to start Whisper STT service"
 
     state._thread_stop_flag = False
@@ -62,6 +69,7 @@ async def samantha_start() -> str:
 
     if not ready:
         state._thread_stop_flag = True
+        SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
         return "❌ Samantha failed to start - audio stream not ready after 30 seconds. Please try again."
 
     return "🎧 Samantha started. Say 'Hey Samantha' to activate, 'Samantha sleep' to deactivate. During TTS: 'skip' for next, 'stop' to interrupt."
