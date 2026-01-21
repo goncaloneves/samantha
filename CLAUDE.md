@@ -92,7 +92,7 @@ Config file values take precedence over environment variables.
 | `SAMANTHA_RESTORE_FOCUS` | Return to previous app after injection | `true` |
 | `SAMANTHA_MIN_AUDIO_ENERGY` | Audio threshold for noise filtering | `3000` |
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
-| `SAMANTHA_INJECTION_MODE` | `auto`, `extension`, or `cli` | `auto` |
+| `SAMANTHA_INJECTION_MODE` | `auto`, `extension`, `cli`, or `terminal` | `auto` |
 | `SAMANTHA_AI_PROCESS_PATTERN` | Regex to detect AI CLIs | `claude\|gemini\|copilot\|...` |
 | `SAMANTHA_AI_WINDOW_TITLES` | Window titles to search | `claude,gemini,...` |
 | `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default |

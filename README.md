@@ -246,7 +246,7 @@ Add these to your config for advanced control:
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `target_app` | Force injection into a specific app (e.g., `Cursor`, `Terminal`) | Auto-detect |
-| `injection_mode` | `auto`, `extension`, or `cli` | `auto` |
+| `injection_mode` | `auto`, `extension`, `cli`, or `terminal` | `auto` |
 | `ai_process_pattern` | Regex pattern to detect AI CLI processes | `claude\|gemini\|copilot\|...` |
 | `ai_window_titles` | Window titles to search for AI terminals | `["claude", "gemini", ...]` |
 
@@ -257,6 +257,7 @@ Add these to your config for advanced control:
 | `auto` | Try extension first, then CLI, then standalone terminal (default) |
 | `extension` | Only use AI extension panel (`Cmd+Escape`) |
 | `cli` | Only use IDE's integrated terminal (`Ctrl+``) |
+| `terminal` | Only use standalone terminal apps (Terminal, iTerm2, Warp, etc.) |
 
 ### Force a Specific App
 

@@ -314,27 +314,44 @@ def inject_into_terminal(text: str) -> bool:
 def inject_into_app(text: str, log_type: str = None):
     """Inject text into IDE or terminal (with fallback).
 
-    Tries IDE first (Cursor, VS Code, etc.), then falls back to terminal.
+    Behavior depends on injection_mode config:
+    - 'auto' (default): Try IDE first, then fall back to terminal
+    - 'extension': Only try IDE extension panel
+    - 'cli': Only try IDE's integrated terminal
+    - 'terminal': Only try standalone terminal apps
+
     Captures frontmost app right before injection and restores focus after.
     """
     previous_app = get_frontmost_app() if get_restore_focus() else None
+    injection_mode = get_injection_mode()
 
     success = False
     target_app = None
-    ide_name = get_running_ide()
-    if ide_name and inject_into_ide(text):
-        success = True
-        target_app = ide_name
-    else:
-        if ide_name:
-            logger.info("%s injection failed, falling back to terminal", ide_name)
-        else:
-            logger.debug("No IDE found, trying terminal")
+
+    if injection_mode == "terminal":
+        logger.debug("Terminal mode: skipping IDE, going directly to terminal")
         if inject_into_terminal(text):
             success = True
             target_app = "Terminal"
         else:
-            logger.error("All injection methods failed - no AI target found")
+            logger.error("Terminal injection failed - no AI running in terminal")
+    else:
+        ide_name = get_running_ide()
+        if ide_name and inject_into_ide(text):
+            success = True
+            target_app = ide_name
+        elif injection_mode in ("extension", "cli"):
+            logger.error("%s mode injection failed", injection_mode)
+        else:
+            if ide_name:
+                logger.info("%s injection failed, falling back to terminal", ide_name)
+            else:
+                logger.debug("No IDE found, trying terminal")
+            if inject_into_terminal(text):
+                success = True
+                target_app = "Terminal"
+            else:
+                logger.error("All injection methods failed - no AI target found")
 
     if not success:
         try:

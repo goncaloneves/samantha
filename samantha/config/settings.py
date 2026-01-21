@@ -130,16 +130,17 @@ def get_target_app() -> str | None:
 
 
 def get_injection_mode() -> str:
-    """Get injection mode: 'auto', 'extension', or 'cli'.
+    """Get injection mode: 'auto', 'extension', 'cli', or 'terminal'.
 
     - auto (default): Try extension first, then CLI, then standalone terminal
     - extension: Use Cmd+Escape to focus Claude Code extension input
     - cli: Focus IDE's integrated terminal (Ctrl+`) for Claude CLI usage
+    - terminal: Only use standalone terminal apps (Terminal, iTerm2, Warp, etc.)
 
     Returns 'auto' by default.
     """
     val = get_config("injection_mode", "auto")
-    if isinstance(val, str) and val.strip().lower() in ("auto", "extension", "cli"):
+    if isinstance(val, str) and val.strip().lower() in ("auto", "extension", "cli", "terminal"):
         return val.strip().lower()
     return "auto"
 
