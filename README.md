@@ -203,28 +203,24 @@ For developers integrating Samantha:
 ### How It Works
 
 ```mermaid
-flowchart TB
-    subgraph ACTIVE["🟢 ACTIVE - Listening for your voice"]
-        A[🎙️ Record] --> B[Whisper]
-        B --> C[Inject to Claude]
-        C --> D[Claude responds]
-        D --> E[🔊 TTS speaks]
-        E --> A
-    end
+stateDiagram-v2
+    [*] --> Idle: /samantha:start
 
-    subgraph IDLE["💤 IDLE - Waiting for wake word"]
-        F[🎙️ Listening...]
-    end
+    Idle --> Active: "Hey Samantha"
+    Active --> Idle: "Samantha sleep"
 
-    IDLE -->|"Hey Samantha"| ACTIVE
-    ACTIVE -->|"Samantha sleep"| IDLE
+    Idle --> [*]: /samantha:stop
+    Active --> [*]: /samantha:stop
 
-    START[/samantha:start/] --> IDLE
-    ACTIVE -->|/samantha:stop| STOP[Stopped]
-    IDLE -->|/samantha:stop| STOP
+    state Active {
+        [*] --> Record
+        Record --> Transcribe
+        Transcribe --> Inject
+        Inject --> Respond
+        Respond --> Speak
+        Speak --> Record
+    }
 ```
-
-**Injection flow**: When you speak, Samantha transcribes → copies to clipboard → activates target app → pastes + enters → restores focus.
 
 For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 
