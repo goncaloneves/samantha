@@ -114,3 +114,31 @@ def get_deactivation_phrases() -> list:
             return [p.lower() for p in config_phrases]
         return [p.strip().lower() for p in config_phrases.split(",")]
     return DEFAULT_DEACTIVATION_PHRASES
+
+
+def get_target_app() -> str | None:
+    """Get user's preferred target app for injection.
+
+    If set, Samantha will inject into this app instead of auto-detecting.
+    Must be one of: Cursor, Code, Windsurf, Terminal, iTerm2, etc.
+
+    Returns None if not set (auto-detect mode).
+    """
+    val = get_config("target_app")
+    if val and isinstance(val, str) and val.strip():
+        return val.strip()
+    return None
+
+
+def get_injection_mode() -> str:
+    """Get injection mode: 'extension' or 'cli'.
+
+    - extension (default): Use Cmd+Escape to focus Claude Code extension input
+    - cli: Focus IDE's integrated terminal (Ctrl+`) for Claude CLI usage
+
+    Returns 'extension' by default.
+    """
+    val = get_config("injection_mode", "extension")
+    if isinstance(val, str) and val.strip().lower() in ("extension", "cli"):
+        return val.strip().lower()
+    return "extension"

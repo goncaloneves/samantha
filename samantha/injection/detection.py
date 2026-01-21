@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import time
 
-from samantha.config import IDE_PROCESS_NAMES
+from samantha.config import IDE_PROCESS_NAMES, get_target_app, SUPPORTED_TERMINALS
 
 logger = logging.getLogger("samantha")
 
@@ -162,11 +162,61 @@ def kill_orphaned_processes():
         logger.debug("Cleanup check failed: %s", e)
 
 
+def _is_app_running_with_windows(app_name: str) -> bool:
+    """Check if a specific app is running with at least one window open."""
+    try:
+        if PLATFORM == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", f'tell application "System Events" to tell process "{app_name}" to get (count of windows)'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                window_count = int(result.stdout.strip())
+                return window_count > 0
+        elif PLATFORM == "Linux":
+            if shutil.which("xdotool"):
+                result = subprocess.run(
+                    ["xdotool", "search", "--name", app_name],
+                    capture_output=True, text=True, timeout=5
+                )
+                return result.returncode == 0 and bool(result.stdout.strip())
+            if shutil.which("wmctrl"):
+                result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
+                return result.returncode == 0 and app_name.lower() in result.stdout.lower()
+        elif PLATFORM == "Windows":
+            try:
+                import pygetwindow as gw
+                windows = gw.getWindowsWithTitle(app_name)
+                return len(windows) > 0
+            except ImportError:
+                result = subprocess.run(
+                    ["powershell", "-Command", f"Get-Process -Name '{app_name}' -ErrorAction SilentlyContinue"],
+                    capture_output=True, text=True, timeout=5
+                )
+                return result.returncode == 0 and bool(result.stdout.strip())
+    except Exception as e:
+        logger.debug("App check for '%s' failed: %s", app_name, e)
+    return False
+
+
 def get_running_ide() -> str | None:
     """Find which supported IDE is running with windows open (cross-platform).
 
+    If target_app is configured, prioritizes that app. If target_app is a terminal,
+    returns None to trigger terminal fallback.
+
     Returns the IDE name if found, None otherwise.
     """
+    target = get_target_app()
+    if target:
+        if target in SUPPORTED_TERMINALS:
+            logger.debug("target_app is terminal '%s', skipping IDE detection", target)
+            return None
+        if _is_app_running_with_windows(target):
+            logger.debug("Using configured target_app: %s", target)
+            return target
+        logger.debug("target_app '%s' not running, falling back to auto-detect", target)
+
     ide_names = IDE_PROCESS_NAMES.get(PLATFORM, [])
 
     try:

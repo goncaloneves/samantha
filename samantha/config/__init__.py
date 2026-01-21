@@ -37,6 +37,8 @@ from .settings import (
     get_min_audio_energy,
     get_wake_words,
     get_deactivation_phrases,
+    get_target_app,
+    get_injection_mode,
 )
 
 __all__ = [
@@ -75,4 +77,6 @@ __all__ = [
     "get_min_audio_energy",
     "get_wake_words",
     "get_deactivation_phrases",
+    "get_target_app",
+    "get_injection_mode",
 ]

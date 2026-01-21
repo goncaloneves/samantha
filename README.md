@@ -123,7 +123,9 @@ Create `~/.samantha/config.json` to customize:
   "show_status": true,
   "theodore": true,
   "restore_focus": true,
-  "min_audio_energy": 3000
+  "min_audio_energy": 3000,
+  "target_app": null,
+  "injection_mode": "extension"
 }
 ```
 
@@ -138,6 +140,8 @@ Create `~/.samantha/config.json` to customize:
 | `theodore` | Call you "Theodore" like in the movie | `true` |
 | `restore_focus` | Return to your previous app after injection | `true` |
 | `min_audio_energy` | Audio threshold to filter background noise | `3000` |
+| `target_app` | Force injection into a specific app (e.g., `Cursor`, `Terminal`) | Auto-detect |
+| `injection_mode` | `extension` for Claude Code extension, `cli` for integrated terminal | `extension` |
 | `input_device` | Microphone device index | System default |
 | `output_device` | Speaker device index | System default |
 
@@ -183,7 +187,18 @@ Samantha can inject your voice commands into:
 - **IDEs with Claude Code**: Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
 - **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, and more
 
-Samantha automatically detects which app to use. IDEs are preferred when available.
+By default, Samantha auto-detects which app to use (IDEs preferred). You can customize this:
+
+```json
+{
+  "target_app": "Cursor",
+  "injection_mode": "extension"
+}
+```
+
+**Injection modes:**
+- `extension` (default): Injects into Claude Code extension panel (`Cmd+Escape`)
+- `cli`: Injects into IDE's integrated terminal (`Ctrl+``) for Claude CLI users
 
 ## 🔧 CLI Commands
 
