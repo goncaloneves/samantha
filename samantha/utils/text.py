@@ -120,13 +120,19 @@ def is_noise(text: str) -> bool:
         if keyword in sanitized:
             return False
 
+    noise_phrases = [
+        'thank you for watching', 'thanks for watching',
+        'like and subscribe', 'subscribe to',
+        'blank audio', 'music playing', 'clock ticking',
+    ]
+    for phrase in noise_phrases:
+        if phrase in sanitized:
+            return True
+
     noise_words = [
         'click', 'clap', 'ding', 'bell', 'tick', 'thud', 'bang',
         'engine', 'revving', 'keyboard', 'typing', 'noise',
-        'blank audio', 'silence', 'static', 'hum', 'buzz',
-        'music', 'music playing', 'clock ticking',
-        'thank you for watching', 'thanks for watching',
-        'subscribe', 'like and subscribe',
+        'silence', 'static', 'hum', 'buzz', 'music',
     ]
     if sanitized in noise_words:
         return True
