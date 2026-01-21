@@ -112,6 +112,7 @@ samantha-install download-model small  # Download additional Whisper model
 | `SAMANTHA_OUTPUT_DEVICE` | Audio output device index | System default (dynamic) |
 | `SAMANTHA_SHOW_STATUS` | Show status messages (activated/deactivated/interrupted) | `true` |
 | `SAMANTHA_THEODORE` | Call user "Theodore" (from the movie Her); if false, use gender-neutral language | `true` |
+| `SAMANTHA_RESTORE_FOCUS` | Restore focus to previous app after injection | `true` |
 
 ### Config File
 
@@ -125,7 +126,8 @@ Create `~/.samantha/config.json` for easy customization:
   "show_status": true,
   "input_device": null,
   "output_device": null,
-  "theodore": true
+  "theodore": true,
+  "restore_focus": true
 }
 ```
 
@@ -143,6 +145,7 @@ export SAMANTHA_SHOW_STATUS="false"
 export SAMANTHA_INPUT_DEVICE="2"   # Use `python -m sounddevice` to list devices
 export SAMANTHA_OUTPUT_DEVICE="0"  # Audio output device (null = system default, dynamic)
 export SAMANTHA_THEODORE="true"    # Set to "false" for gender-neutral language
+export SAMANTHA_RESTORE_FOCUS="true"  # Return to previous app after injection
 ```
 
 ### Voice Options
@@ -172,16 +175,22 @@ samantha-install download-model medium  # Better accuracy (1.5GB)
 
 ## 🖥️ Platform Support
 
-| Platform | Clipboard | Keystrokes |
-|----------|-----------|------------|
-| **macOS** | Built-in | Built-in |
-| **Linux (X11)** | `xclip`/`xsel` | `xdotool` |
-| **Linux (Wayland)** | `wl-copy` | `ydotool` |
-| **Windows** | Built-in | `pyautogui` |
+| Platform | Clipboard | Keystrokes | Window Detection |
+|----------|-----------|------------|------------------|
+| **macOS** | Built-in | AppleScript | System Events |
+| **Linux (X11)** | `xclip`/`xsel` | `xdotool` | `xdotool`/`wmctrl` |
+| **Linux (Wayland)** | `wl-copy` | `ydotool` | Limited |
+| **Windows** | Built-in | `pyautogui` | `pygetwindow`/PowerShell |
 
 ### Supported Apps
 
-Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
+**IDE**: Cursor (with Claude Code extension)
+
+**Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, gnome-terminal, konsole, xfce4-terminal, xterm, Windows Terminal, PowerShell, cmd
+
+### Smart Injection
+
+Samantha tries Cursor first (using Cmd/Ctrl+Escape to focus Claude input), then falls back to terminal. After injection, it restores focus to your previous app (configurable via `restore_focus`).
 
 ## 🔬 Technical Details
 
@@ -199,15 +208,15 @@ Cursor, Claude Code CLI, Terminal, iTerm2, Warp, Alacritty, kitty
 When you speak to Samantha, your voice is transcribed and "injected" into the target app (Cursor, Terminal, etc.) as if you typed it:
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   🎙️ Mic    │────▶│  Whisper    │────▶│  Clipboard  │────▶│  Activate   │────▶│   Paste +   │
-│   Record    │     │  Transcribe │     │    Copy     │     │  Target App │     │    Enter    │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-     Audio              Text              pbcopy/            Bring window          Cmd+V +
-                                          xclip              to focus              Return
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   🎙️ Mic    │────▶│  Whisper    │────▶│  Clipboard  │────▶│  Activate   │────▶│   Paste +   │────▶│  Restore    │
+│   Record    │     │  Transcribe │     │    Copy     │     │  Target App │     │    Enter    │     │    Focus    │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+     Audio              Text              pbcopy/            Bring window          Cmd+V +          Return to
+                                          xclip              to focus              Return           previous app
 ```
 
-> **Important**: Make sure your cursor is in the input field where you want the text to appear before speaking. The paste will go wherever your cursor was last focused in the target app.
+**Cursor-specific**: When injecting into Cursor, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 
 This clipboard-based approach works reliably across all supported apps without requiring app-specific APIs.
 

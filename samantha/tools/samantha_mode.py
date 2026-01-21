@@ -107,6 +107,13 @@ def get_show_status() -> bool:
     return str(val).lower() == "true"
 
 
+def get_restore_focus() -> bool:
+    val = get_config("restore_focus", "true")
+    if isinstance(val, bool):
+        return val
+    return str(val).lower() == "true"
+
+
 def get_theodore_mode() -> bool:
     """Check if Theodore mode is enabled (call user Theodore from the movie Her)."""
     val = get_config("theodore", "true")
@@ -413,15 +420,59 @@ PLATFORM = platform.system()
 
 
 def get_frontmost_app() -> str:
-    """Get the frontmost application name (macOS only)."""
-    if PLATFORM != "Darwin":
-        return ""
+    """Get the frontmost application name (cross-platform)."""
     try:
-        result = subprocess.run(
-            ["osascript", "-e", 'tell application "System Events" to get name of first process whose frontmost is true'],
-            capture_output=True, text=True, check=True
-        )
-        return result.stdout.strip()
+        if PLATFORM == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to get name of first process whose frontmost is true'],
+                capture_output=True, text=True, check=True, timeout=5
+            )
+            return result.stdout.strip()
+        elif PLATFORM == "Linux":
+            if shutil.which("xdotool"):
+                result = subprocess.run(
+                    ["xdotool", "getactivewindow", "getwindowname"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            if shutil.which("wmctrl") and shutil.which("xprop"):
+                result = subprocess.run(
+                    ["bash", "-c", "xprop -root _NET_ACTIVE_WINDOW | awk '{print $5}'"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    window_id = result.stdout.strip()
+                    result = subprocess.run(
+                        ["xprop", "-id", window_id, "WM_NAME"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        import re
+                        match = re.search(r'"(.+)"', result.stdout)
+                        if match:
+                            return match.group(1)
+            return ""
+        elif PLATFORM == "Windows":
+            try:
+                import pygetwindow as gw
+                active = gw.getActiveWindow()
+                if active:
+                    return active.title
+            except ImportError:
+                pass
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                buf = ctypes.create_unicode_buffer(length + 1)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+                return buf.value
+            except Exception:
+                pass
+            return ""
+        else:
+            return ""
     except Exception:
         return ""
 
@@ -530,16 +581,33 @@ def activate_app(app_name: str) -> bool:
                 return False
         elif PLATFORM == "Windows":
             try:
-                import pyautogui
                 import pygetwindow as gw
                 windows = gw.getWindowsWithTitle(app_name)
                 if windows:
                     windows[0].activate()
                     return True
-                return False
             except ImportError:
-                logger.warning("pygetwindow not installed for Windows window activation")
-                return False
+                pass
+            try:
+                powershell_script = f'''
+                $app = Get-Process | Where-Object {{$_.MainWindowTitle -like "*{app_name}*"}} | Select-Object -First 1
+                if ($app) {{
+                    Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    public class Win32 {{
+                        [DllImport("user32.dll")]
+                        public static extern bool SetForegroundWindow(IntPtr hWnd);
+                    }}
+"@
+                    [Win32]::SetForegroundWindow($app.MainWindowHandle)
+                }}
+                '''
+                result = subprocess.run(["powershell", "-Command", powershell_script], capture_output=True, timeout=5)
+                return result.returncode == 0
+            except Exception:
+                pass
+            return False
         else:
             return False
     except Exception as e:
@@ -565,26 +633,280 @@ def kill_orphaned_processes():
         logger.debug("Cleanup check failed: %s", e)
 
 
-def inject_into_app(text: str, log_type: str = None):
-    """Inject text into Cursor/terminal using clipboard paste (cross-platform)."""
-    target = os.getenv("SAMANTHA_TARGET_APP") or get_frontmost_app()
-    if target not in SUPPORTED_APPS:
-        target = "Cursor"
+def is_cursor_available() -> bool:
+    """Check if Cursor is running and has windows open (cross-platform)."""
+    try:
+        if PLATFORM == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to tell process "Cursor" to get (count of windows)'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                return False
+            window_count = int(result.stdout.strip())
+            return window_count > 0
+        elif PLATFORM == "Linux":
+            if shutil.which("xdotool"):
+                result = subprocess.run(
+                    ["xdotool", "search", "--name", "Cursor"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return True
+            if shutil.which("wmctrl"):
+                result = subprocess.run(
+                    ["wmctrl", "-l"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and "Cursor" in result.stdout:
+                    return True
+            return False
+        elif PLATFORM == "Windows":
+            try:
+                import pygetwindow as gw
+                windows = gw.getWindowsWithTitle("Cursor")
+                return len(windows) > 0
+            except ImportError:
+                pass
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", "Get-Process -Name Cursor -ErrorAction SilentlyContinue"],
+                    capture_output=True, text=True, timeout=5
+                )
+                return result.returncode == 0 and result.stdout.strip() != ""
+            except Exception:
+                pass
+            return False
+        else:
+            return False
+    except Exception as e:
+        logger.debug("Cursor detection failed: %s", e)
+        return False
+
+
+def is_claude_process_running() -> bool:
+    """Check if Claude Code process is running (cross-platform)."""
+    try:
+        if PLATFORM in ("Darwin", "Linux"):
+            result = subprocess.run(
+                ["bash", "-c", "ps aux | grep -c '[c]laude.*stream-json'"],
+                capture_output=True, text=True, timeout=5
+            )
+            count = int(result.stdout.strip()) if result.stdout.strip() else 0
+            return count > 0
+        elif PLATFORM == "Windows":
+            result = subprocess.run(
+                ["powershell", "-Command", "Get-Process | Where-Object {$_.ProcessName -like '*claude*'} | Measure-Object | Select-Object -ExpandProperty Count"],
+                capture_output=True, text=True, timeout=5
+            )
+            count = int(result.stdout.strip()) if result.stdout.strip() else 0
+            return count > 0
+        else:
+            return False
+    except Exception as e:
+        logger.debug("Claude process detection failed: %s", e)
+        return False
+
+
+def focus_cursor_claude_input() -> bool:
+    """Focus Cursor's Claude input field using Cmd/Ctrl+Escape (cross-platform).
+
+    This shortcut toggles focus between the editor and Claude's prompt box in Cursor.
+    """
+    try:
+        if PLATFORM == "Darwin":
+            activate_app("Cursor")
+            time.sleep(0.3)
+            subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to key code 53 using command down'],
+                check=True, capture_output=True, timeout=5
+            )
+            time.sleep(0.2)
+            return True
+        elif PLATFORM == "Linux":
+            activate_app("Cursor")
+            time.sleep(0.3)
+            if shutil.which("xdotool"):
+                subprocess.run(
+                    ["xdotool", "key", "ctrl+Escape"],
+                    check=True, capture_output=True, timeout=5
+                )
+                time.sleep(0.2)
+                return True
+            elif shutil.which("ydotool"):
+                subprocess.run(
+                    ["ydotool", "key", "29:1", "1:1", "1:0", "29:0"],
+                    check=True, capture_output=True, timeout=5
+                )
+                time.sleep(0.2)
+                return True
+            return False
+        elif PLATFORM == "Windows":
+            activate_app("Cursor")
+            time.sleep(0.3)
+            try:
+                import pyautogui
+                pyautogui.hotkey('ctrl', 'escape')
+                time.sleep(0.2)
+                return True
+            except ImportError:
+                pass
+            try:
+                powershell_script = '''
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.SendKeys]::SendWait("^{ESC}")
+                '''
+                subprocess.run(["powershell", "-Command", powershell_script], check=True, timeout=5)
+                time.sleep(0.2)
+                return True
+            except Exception:
+                pass
+            return False
+        else:
+            return False
+    except Exception as e:
+        logger.debug("Focus Cursor Claude input failed: %s", e)
+        return False
+
+
+def inject_into_cursor(text: str) -> bool:
+    """Inject text into Cursor's Claude input field.
+
+    Returns True if injection succeeded, False otherwise.
+    """
+    if not is_cursor_available():
+        logger.debug("Cursor not available (no windows)")
+        return False
+
+    if not is_claude_process_running():
+        logger.debug("Claude process not running")
+        return False
+
+    logger.info("💉 Injecting into Cursor: %s", text[:50])
+
+    if not copy_to_clipboard(text):
+        logger.error("Failed to copy to clipboard")
+        return False
+
+    if not focus_cursor_claude_input():
+        logger.warning("Failed to focus Cursor Claude input")
+        return False
+
+    time.sleep(0.2)
+
+    if simulate_paste_and_enter():
+        logger.info("✅ Injected into Cursor")
+        return True
+    else:
+        logger.error("Paste failed in Cursor")
+        return False
+
+
+def find_terminal_with_claude() -> str:
+    """Find a terminal window running Claude (cross-platform).
+
+    Returns the terminal app name or window identifier, or empty string if not found.
+    """
+    try:
+        if PLATFORM == "Darwin":
+            for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
+                try:
+                    result = subprocess.run(
+                        ["osascript", "-e", f'tell application "System Events" to tell process "{app}" to get (count of windows)'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and int(result.stdout.strip()) > 0:
+                        return app
+                except Exception:
+                    continue
+            return "Terminal"
+        elif PLATFORM == "Linux":
+            terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm", "alacritty", "kitty", "terminator", "tilix"]
+            if shutil.which("xdotool"):
+                for term in terminals:
+                    result = subprocess.run(
+                        ["xdotool", "search", "--name", term],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        return term
+            if shutil.which("wmctrl"):
+                result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    for term in terminals:
+                        if term.lower() in result.stdout.lower():
+                            return term
+            return "xterm"
+        elif PLATFORM == "Windows":
+            terminals = ["Windows Terminal", "Command Prompt", "PowerShell", "cmd"]
+            try:
+                import pygetwindow as gw
+                for term in terminals:
+                    windows = gw.getWindowsWithTitle(term)
+                    if windows:
+                        return term
+            except ImportError:
+                pass
+            return "cmd"
+        else:
+            return ""
+    except Exception as e:
+        logger.debug("Terminal detection failed: %s", e)
+        return ""
+
+
+def inject_into_terminal(text: str) -> bool:
+    """Inject text into Terminal running Claude (cross-platform).
+
+    Returns True if injection succeeded, False otherwise.
+    """
+    target = find_terminal_with_claude()
+    if not target:
+        logger.warning("No terminal found")
+        return False
 
     logger.info("💉 Injecting into %s: %s", target, text[:50])
 
     if not copy_to_clipboard(text):
         logger.error("Failed to copy to clipboard")
-        return
+        return False
 
-    if PLATFORM == "Darwin":
-        activate_app(target)
-        time.sleep(0.5)
+    activate_app(target)
+    time.sleep(0.5)
 
     if simulate_paste_and_enter():
-        logger.info("✅ Injected via clipboard (%s)", PLATFORM)
+        logger.info("✅ Injected into %s", target)
+        return True
     else:
-        logger.error("Injection failed on %s", PLATFORM)
+        logger.error("Injection failed in %s", target)
+        return False
+
+
+def inject_into_app(text: str, log_type: str = None):
+    """Inject text into Cursor or terminal (with fallback).
+
+    Tries Cursor first (if available), then falls back to terminal.
+    Captures frontmost app right before injection and restores focus after.
+    """
+    previous_app = get_frontmost_app() if get_restore_focus() else None
+
+    success = False
+    target_app = None
+    if inject_into_cursor(text):
+        success = True
+        target_app = "Cursor"
+    else:
+        logger.info("Cursor injection failed, falling back to terminal")
+        if inject_into_terminal(text):
+            success = True
+            target_app = "Terminal"
+        else:
+            logger.error("All injection methods failed")
+
+    if success and previous_app and get_restore_focus() and previous_app != target_app:
+        time.sleep(0.3)
+        activate_app(previous_app)
+        logger.debug("Restored focus to %s", previous_app)
 
 
 def clean_command(text: str) -> str:
@@ -896,7 +1218,7 @@ def samantha_loop_thread():
                         audio_chunks = []
                         silence_duration_ms = 0
                         recording_start = 0
-
+                    
                         done_event = _tts_done_event
                         tts_text_to_speak = tts_text
 
