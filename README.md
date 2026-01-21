@@ -233,8 +233,8 @@ Configure where Samantha injects your voice commands in `~/.samantha/config.json
 #### Option 1: Auto Mode (Default)
 
 Leave settings at defaults. Samantha will try injection methods in order:
-1. **Extension mode** - Claude Code extension panel (if running)
-2. **CLI mode** - IDE's integrated terminal (if Claude CLI is running there)
+1. **Extension mode** - AI extension panel (if any AI from `ai_process_pattern` is running)
+2. **CLI mode** - IDE's integrated terminal (if any AI CLI is running there)
 3. **Standalone terminal** - External terminal app (as final fallback)
 
 ```json
@@ -243,6 +243,8 @@ Leave settings at defaults. Samantha will try injection methods in order:
   "injection_mode": "auto"
 }
 ```
+
+With `target_app: null`, Samantha auto-detects any running AI that matches `ai_process_pattern` (Claude, Gemini, Copilot, etc.).
 
 #### Option 2: Force a Specific App
 
@@ -290,7 +292,7 @@ This focuses the Claude Code extension panel (`Cmd+Escape` shortcut) instead of 
 | Mode | Default | Description |
 |------|---------|-------------|
 | `auto` | Yes | Try extension first, then CLI, then standalone terminal |
-| `extension` | No | Only use Claude Code extension (`Cmd+Escape`) |
+| `extension` | No | Only use AI extension panel (`Cmd+Escape`) |
 | `cli` | No | Only use IDE's integrated terminal (`Ctrl+``) |
 
 **Smart detection:** In `auto` and `cli` modes, Samantha verifies an AI CLI is running in the **specific IDE's terminal** (not just any terminal) by tracing the process tree. This prevents injecting into the wrong terminal.
