@@ -286,7 +286,10 @@ async def transcribe_audio(audio_data: np.ndarray) -> Optional[str]:
 
 
 def speak_tts_sync(text: str) -> bool:
-    """Speak text using Kokoro TTS via sounddevice."""
+    """Speak text using Kokoro TTS with PCM streaming directly to sounddevice.
+
+    Can be interrupted by setting _tts_interrupt = True.
+    """
     global _last_tts_text, _last_tts_time, _tts_interrupt
     logger.info("🔊 TTS: %s", text[:80] + "..." if len(text) > 80 else text)
 
@@ -294,50 +297,61 @@ def speak_tts_sync(text: str) -> bool:
     _last_tts_time = time.time()
     _tts_interrupt = False
 
+    stream = None
+    interrupted = False
     try:
         import requests
 
-        response = requests.post(
+        stream = sd.OutputStream(
+            device=get_output_device(),
+            samplerate=24000,
+            channels=1,
+            dtype='int16',
+            blocksize=1024,
+            latency='low'
+        )
+        stream.start()
+
+        with requests.post(
             KOKORO_URL,
             json={
                 "model": "kokoro",
                 "input": text,
                 "voice": get_voice(),
-                "response_format": "wav",
+                "response_format": "pcm",
+                "stream": True
             },
             timeout=60.0,
-        )
+            stream=True
+        ) as response:
+            if response.status_code != 200:
+                logger.error("TTS error: HTTP %s", response.status_code)
+                return False
 
-        if response.status_code != 200:
-            logger.error("TTS error: HTTP %s", response.status_code)
-            return False
+            for chunk in response.iter_content(chunk_size=1024):
+                if _tts_interrupt:
+                    logger.info("🛑 TTS interrupted by user - aborting stream")
+                    interrupted = True
+                    stream.abort()
+                    break
+                if chunk:
+                    audio_array = np.frombuffer(chunk, dtype=np.int16)
+                    stream.write(audio_array)
 
-        from pydub import AudioSegment
-
-        audio = AudioSegment.from_wav(io.BytesIO(response.content))
-        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-        samples = samples / 32768.0
-
-        if audio.channels == 2:
-            samples = samples.reshape((-1, 2))
-        else:
-            samples = samples.reshape((-1, 1))
-
-        sd.play(samples, samplerate=audio.frame_rate, device=get_output_device())
-        while sd.get_stream().active:
-            if _tts_interrupt:
-                sd.stop()
-                logger.info("🛑 TTS interrupted")
-                break
-            time.sleep(0.05)
-
-        if not _tts_interrupt:
+        if not interrupted:
+            stream.stop()
             log_conversation("TTS", text)
-        _tts_interrupt = False
         return True
     except Exception as e:
         logger.error("TTS error: %s", e)
         return False
+    finally:
+        if stream:
+            try:
+                stream.close()
+            except Exception:
+                pass
+        _tts_interrupt = False
 
 
 async def speak_tts(text: str) -> bool:
