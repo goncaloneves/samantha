@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="assets/samantha.gif" alt="Samantha OS" width="400">
   <h1 align="center">🎙️ Samantha</h1>
   <p align="center"><strong>Voice assistant for Claude Code with wake word detection</strong></p>
   <p align="center">
