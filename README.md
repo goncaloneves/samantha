@@ -132,7 +132,7 @@ Config file takes precedence over environment variables.
 
 Available voices: `af_aoede` (default), `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`
 
-### Always-On Recording (No Headphones Required)
+### Laptop Mic Support (No Headphones Required)
 
 Samantha works great with your laptop's built-in microphone - no headphones or external mic needed. The `min_audio_energy` setting intelligently filters background noise so you can type, click, and work normally while Samantha listens for your voice.
 
@@ -210,7 +210,7 @@ graph TB
         I[Listening for wake word]
     end
 
-    subgraph ACTIVE[🟢 Active]
+    subgraph ACTIVE[🟢 Active - Listening]
         A1[🎙️ Record] --> A2[Transcribe]
         A2 --> A3[Inject to Claude]
         A3 --> A4[Claude responds]
