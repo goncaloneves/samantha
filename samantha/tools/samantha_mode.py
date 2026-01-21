@@ -1333,7 +1333,7 @@ def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
 
         max_energy = np.max(np.abs(audio_data))
         if max_energy < MIN_AUDIO_ENERGY:
-            logger.debug("Audio energy too low (%d < %d), skipping Whisper", max_energy, MIN_AUDIO_ENERGY)
+            logger.debug("Audio energy: %d (threshold: %d) - skipping Whisper", max_energy, MIN_AUDIO_ENERGY)
             return None
 
         audio_data = normalize_audio(audio_data)
@@ -1347,7 +1347,9 @@ def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
         )
         if response.status_code == 200:
             result = response.json()
-            return result.get("text", "").strip()
+            text = result.get("text", "").strip()
+            logger.debug("Audio energy: %d (threshold: %d) - Whisper heard: %s", max_energy, MIN_AUDIO_ENERGY, text[:50] if text else "(empty)")
+            return text
     except Exception as e:
         logger.debug("STT error: %s", e)
     return None
