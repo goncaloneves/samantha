@@ -210,6 +210,16 @@ By default, Samantha auto-detects which app to use (IDEs preferred over terminal
 | **ShellGPT** | `sgpt` | ✅ Yes |
 | **OpenAI Codex** | `codex` | ✅ Yes |
 
+### MCP Setup
+
+Add Samantha to your AI tool's MCP configuration:
+
+| AI Tool | Setup Command |
+|---------|---------------|
+| **Claude Code** | `claude mcp add samantha -- samantha` |
+| **Gemini CLI** | `gemini mcp add samantha -- samantha` |
+| **Other AI CLIs** | Add to your MCP config file (see your AI's docs) |
+
 ### How It Works
 
 Out of the box, Samantha detects **any** of these AIs automatically. The default pattern is:
