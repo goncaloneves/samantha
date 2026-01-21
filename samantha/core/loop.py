@@ -17,6 +17,7 @@ except ImportError:
 from samantha.config import (
     SAMPLE_RATE,
     CHANNELS,
+    VOICE_MESSAGE_PREFIX,
     get_input_device,
     get_show_status,
 )
@@ -238,7 +239,7 @@ def samantha_loop_thread():
 
                     if not speech_detected:
                         if is_speech:
-                            logger.info("🎤 Speech detected, starting active recording")
+                            logger.info("🎙️ Speech detected, starting active recording")
                             speech_detected = True
                             recording_start = time.time()
                             silence_duration_ms = 0
@@ -280,7 +281,7 @@ def samantha_loop_thread():
                                                 cleaned = clean_command(text)
                                                 if cleaned:
                                                     log_conversation("STT", cleaned)
-                                                    inject_into_app(f"🎤 {cleaned}")
+                                                    inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}")
                                         elif contains_trigger_word(text):
                                             logger.info("✨ Activated!")
                                             is_active = True
@@ -291,7 +292,7 @@ def samantha_loop_thread():
                                             cleaned = clean_command(text)
                                             if cleaned:
                                                 log_conversation("STT", cleaned)
-                                                inject_into_app(f"🎤 {cleaned}")
+                                                inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}")
                                         else:
                                             logger.debug("No trigger - discarding")
 

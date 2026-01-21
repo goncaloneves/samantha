@@ -14,7 +14,7 @@ def log_conversation(entry_type: str, text: str):
     timestamp = datetime.now().strftime("%H:%M:%S")
 
     if entry_type == "STT":
-        log_entry = f"[{timestamp}] 🎤 User: {text}"
+        log_entry = f"[{timestamp}] 🎙️ User: {text}"
     elif entry_type == "TTS":
         log_entry = f"[{timestamp}] 🔊 Samantha: {text}"
     elif entry_type == "INTERRUPT":

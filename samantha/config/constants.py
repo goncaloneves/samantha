@@ -44,6 +44,8 @@ DEFAULT_DEACTIVATION_PHRASES = [
 INTERRUPT_WORDS = ['stop', 'quiet', 'enough', 'halt']
 SKIP_WORDS = ['continue', 'skip']
 
+VOICE_MESSAGE_PREFIX = "[🎙️ Voice - samantha_speak]"
+
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
 # IDEs with Claude Code extension/plugin support (Cmd/Ctrl+Escape focuses Claude input)

@@ -9,6 +9,7 @@ from samantha.config import (
     SAMANTHA_DIR,
     SAMANTHA_ACTIVE_FILE,
     CONVERSATION_LOG,
+    VOICE_MESSAGE_PREFIX,
     get_wake_words,
     get_theodore_mode,
 )
@@ -28,7 +29,7 @@ async def samantha_start() -> str:
     Integrated voice assistant that:
     1. Listens for "Hey Samantha"
     2. Records your voice command
-    3. Sends it to Claude with 🎤 marker
+    3. Sends it to Claude with voice marker
     4. Speaks Claude's response via TTS
     5. Logs conversation (STT/TTS) for history
 
@@ -108,9 +109,9 @@ def _get_samantha_speak_docstring() -> str:
 
     return f"""Speak text via Samantha TTS.
 
-IMPORTANT: Only use this tool when responding to voice commands (messages starting with 🎤).
+IMPORTANT: Only use this tool when responding to voice commands (messages starting with {VOICE_MESSAGE_PREFIX}).
 Do NOT use this for typed text messages - only respond in text for those.
-When responding to 🎤 messages, ONLY use this tool. Do NOT write text output unless showing code.
+When responding to {VOICE_MESSAGE_PREFIX} messages, ONLY use this tool. Do NOT write text output unless showing code.
 
 PERSONA: You ARE Samantha - embody her from the movie "Her":
 - Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing
