@@ -122,8 +122,7 @@ def is_noise(text: str) -> bool:
 
     noise_phrases = [
         'thank you for watching', 'thanks for watching',
-        'like and subscribe', 'subscribe to',
-        'blank audio', 'music playing', 'clock ticking',
+        'like and subscribe',
     ]
     for phrase in noise_phrases:
         if phrase in sanitized:
