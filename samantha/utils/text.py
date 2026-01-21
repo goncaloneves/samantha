@@ -124,7 +124,9 @@ def is_noise(text: str) -> bool:
         'click', 'clap', 'ding', 'bell', 'tick', 'thud', 'bang',
         'engine', 'revving', 'keyboard', 'typing', 'noise',
         'blank audio', 'silence', 'static', 'hum', 'buzz',
-        'music', 'music playing', 'clock ticking'
+        'music', 'music playing', 'clock ticking',
+        'thank you for watching', 'thanks for watching',
+        'subscribe', 'like and subscribe',
     ]
     if sanitized in noise_words:
         return True
