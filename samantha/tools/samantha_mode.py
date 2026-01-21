@@ -988,7 +988,16 @@ def inject_into_app(text: str, log_type: str = None):
             success = True
             target_app = "Terminal"
         else:
-            logger.error("All injection methods failed")
+            logger.error("All injection methods failed - no Claude target found")
+
+    if not success:
+        try:
+            global _tts_text_queue, _tts_queue_lock
+            with _tts_queue_lock:
+                _tts_text_queue.append("I couldn't find Claude running in Cursor or Terminal. Please make sure Claude is open.")
+        except Exception:
+            pass
+        return
 
     if success and previous_app and get_restore_focus() and previous_app != target_app:
         time.sleep(0.3)
