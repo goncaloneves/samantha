@@ -187,7 +187,26 @@ Samantha can inject your voice commands into:
 - **IDEs with Claude Code**: Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
 - **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, and more
 
-By default, Samantha auto-detects which app to use (IDEs preferred). You can customize this:
+By default, Samantha auto-detects which app to use (IDEs preferred over terminals).
+
+### App Injection Setup
+
+Configure where Samantha injects your voice commands in `~/.samantha/config.json`:
+
+#### Option 1: Auto-detect (Default)
+
+Leave `target_app` unset or `null`. Samantha will find the first running IDE with Claude, or fall back to a terminal.
+
+```json
+{
+  "target_app": null,
+  "injection_mode": "extension"
+}
+```
+
+#### Option 2: Force a Specific App
+
+Set `target_app` to always inject into a specific app:
 
 ```json
 {
@@ -196,9 +215,44 @@ By default, Samantha auto-detects which app to use (IDEs preferred). You can cus
 }
 ```
 
-**Injection modes:**
-- `extension` (default): Injects into Claude Code extension panel (`Cmd+Escape`)
-- `cli`: Injects into IDE's integrated terminal (`Ctrl+``) for Claude CLI users
+**Valid `target_app` values:**
+| IDEs | Terminals |
+|------|-----------|
+| `Cursor` | `Terminal` |
+| `Code` (VS Code) | `iTerm2` |
+| `VSCodium` | `Warp` |
+| `Windsurf` | `Alacritty` |
+| `IntelliJ IDEA` | `kitty` |
+| `PyCharm` | `Hyper` |
+| `WebStorm` | `WezTerm` |
+| `PhpStorm` | `Konsole` |
+| `RubyMine` | `GNOME Terminal` |
+| `GoLand` | `Tilix` |
+| `Rider` | `Windows Terminal` |
+| `CLion` | `PowerShell` |
+| `DataGrip` | `cmd` |
+
+#### Option 3: CLI Mode (Claude in Integrated Terminal)
+
+If you run Claude CLI in your IDE's integrated terminal instead of the extension:
+
+```json
+{
+  "target_app": "Cursor",
+  "injection_mode": "cli"
+}
+```
+
+This focuses the IDE's terminal (`Ctrl+`` shortcut) instead of the Claude Code extension panel.
+
+### Injection Modes
+
+| Mode | Default | Shortcut | Use When |
+|------|---------|----------|----------|
+| `extension` | Yes | `Cmd+Escape` | Using Claude Code extension in IDE |
+| `cli` | No | `Ctrl+`` | Running Claude CLI in IDE's integrated terminal |
+
+**Note:** Samantha verifies Claude is actually running before injecting. If Claude isn't found in the target app, injection will fail gracefully.
 
 ## 🔧 CLI Commands
 
