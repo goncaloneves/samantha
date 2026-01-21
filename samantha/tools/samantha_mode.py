@@ -887,41 +887,105 @@ def find_terminal_with_claude() -> str:
 
 
 def activate_terminal_with_claude() -> bool:
-    """Find and activate the terminal window running Claude (macOS).
+    """Find and activate the terminal window running Claude (cross-platform).
 
-    Uses window title matching via System Events (no extra permissions needed).
+    Uses window title matching to find windows containing "claude" or "Claude".
     Returns True if a Claude terminal window was found and activated.
     """
-    if PLATFORM != "Darwin":
-        return False
-
-    for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
-        try:
-            applescript = f'''
-            tell application "System Events"
-                if exists process "{app}" then
-                    tell process "{app}"
-                        set windowList to every window
-                        repeat with aWindow in windowList
-                            if name of aWindow contains "claude" or name of aWindow contains "Claude" then
-                                perform action "AXRaise" of aWindow
-                                set frontmost to true
-                                return "{app}"
-                            end if
-                        end repeat
+    try:
+        if PLATFORM == "Darwin":
+            for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
+                try:
+                    applescript = f'''
+                    tell application "System Events"
+                        if exists process "{app}" then
+                            tell process "{app}"
+                                set windowList to every window
+                                repeat with aWindow in windowList
+                                    if name of aWindow contains "claude" or name of aWindow contains "Claude" then
+                                        perform action "AXRaise" of aWindow
+                                        set frontmost to true
+                                        return "{app}"
+                                    end if
+                                end repeat
+                            end tell
+                        end if
                     end tell
-                end if
-            end tell
-            return ""
-            '''
-            result = subprocess.run(["osascript", "-e", applescript], capture_output=True, text=True, timeout=5)
-            if result.stdout.strip() == app:
-                logger.debug("Found Claude in %s window", app)
-                return True
-        except Exception as e:
-            logger.debug("Error checking %s: %s", app, e)
-            continue
-    return False
+                    return ""
+                    '''
+                    result = subprocess.run(["osascript", "-e", applescript], capture_output=True, text=True, timeout=5)
+                    if result.stdout.strip() == app:
+                        logger.debug("Found Claude in %s window", app)
+                        return True
+                except Exception as e:
+                    logger.debug("Error checking %s: %s", app, e)
+                    continue
+            return False
+
+        elif PLATFORM == "Linux":
+            if shutil.which("xdotool"):
+                result = subprocess.run(
+                    ["xdotool", "search", "--name", "claude"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    window_id = result.stdout.strip().split('\n')[0]
+                    subprocess.run(["xdotool", "windowactivate", window_id], timeout=5)
+                    logger.debug("Found Claude window via xdotool: %s", window_id)
+                    return True
+            if shutil.which("wmctrl"):
+                result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        if 'claude' in line.lower():
+                            window_id = line.split()[0]
+                            subprocess.run(["wmctrl", "-i", "-a", window_id], timeout=5)
+                            logger.debug("Found Claude window via wmctrl: %s", window_id)
+                            return True
+            return False
+
+        elif PLATFORM == "Windows":
+            try:
+                import pygetwindow as gw
+                all_windows = gw.getAllWindows()
+                for window in all_windows:
+                    if window.title and ('claude' in window.title.lower()):
+                        window.activate()
+                        logger.debug("Found Claude window: %s", window.title)
+                        return True
+            except ImportError:
+                pass
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", '''
+                    Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    public class Win32 {
+                        [DllImport("user32.dll")]
+                        public static extern bool SetForegroundWindow(IntPtr hWnd);
+                    }
+"@
+                    $procs = Get-Process | Where-Object {$_.MainWindowTitle -like "*claude*"}
+                    if ($procs) {
+                        [Win32]::SetForegroundWindow($procs[0].MainWindowHandle)
+                        Write-Output "Found"
+                    }
+                    '''],
+                    capture_output=True, text=True, timeout=5
+                )
+                if "Found" in result.stdout:
+                    logger.debug("Found Claude window via PowerShell")
+                    return True
+            except Exception:
+                pass
+            return False
+
+        else:
+            return False
+    except Exception as e:
+        logger.debug("activate_terminal_with_claude error: %s", e)
+        return False
 
 
 def inject_into_terminal(text: str) -> bool:
@@ -939,27 +1003,11 @@ def inject_into_terminal(text: str) -> bool:
         logger.error("Failed to copy to clipboard")
         return False
 
-    if PLATFORM == "Darwin":
-        if not activate_terminal_with_claude():
-            logger.warning("Could not find terminal window with Claude")
-            return False
-        time.sleep(0.3)
-    elif PLATFORM == "Linux":
-        target = find_terminal_with_claude()
-        if target:
-            activate_app(target)
-            time.sleep(0.5)
-        else:
-            logger.warning("No terminal with Claude found")
-            return False
-    elif PLATFORM == "Windows":
-        target = find_terminal_with_claude()
-        if target:
-            activate_app(target)
-            time.sleep(0.5)
-        else:
-            logger.warning("No terminal with Claude found")
-            return False
+    if not activate_terminal_with_claude():
+        logger.warning("Could not find terminal window with Claude")
+        return False
+
+    time.sleep(0.3)
 
     if simulate_paste_and_enter():
         logger.info("✅ Injected into terminal")
