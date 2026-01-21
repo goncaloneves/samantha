@@ -20,6 +20,7 @@ Samantha enables hands-free voice conversations with AI coding assistants (Claud
 - **Natural conversation** - Speak freely, pauses are detected automatically
 - **Voice control** - Interrupt, skip, or put her to sleep with voice commands
 - **Cross-platform** - Works on macOS, Linux, and Windows
+- **Privacy-first** - Speech recognition and TTS run entirely on your machine
 
 ## 🖥️ Platform Support
 
