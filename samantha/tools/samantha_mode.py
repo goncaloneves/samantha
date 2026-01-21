@@ -802,11 +802,42 @@ def inject_into_cursor(text: str) -> bool:
         return False
 
 
+def is_claude_running_in_terminal() -> bool:
+    """Check if Claude is running in a real terminal (not Cursor/IDE).
+
+    Returns True if Claude has a real TTY (like ttys001), False if running in IDE (shows ??).
+    """
+    try:
+        if PLATFORM in ("Darwin", "Linux"):
+            result = subprocess.run(
+                ["bash", "-c", "ps aux | grep '[c]laude' | grep -v grep | awk '{print $7}' | grep -v '??' | head -1"],
+                capture_output=True, text=True, timeout=5
+            )
+            tty = result.stdout.strip()
+            return bool(tty and tty != "??")
+        elif PLATFORM == "Windows":
+            result = subprocess.run(
+                ["powershell", "-Command", "Get-Process | Where-Object {$_.ProcessName -like '*claude*' -and $_.MainWindowHandle -ne 0} | Measure-Object | Select-Object -ExpandProperty Count"],
+                capture_output=True, text=True, timeout=5
+            )
+            count = int(result.stdout.strip()) if result.stdout.strip() else 0
+            return count > 0
+        return False
+    except Exception as e:
+        logger.debug("Terminal Claude check failed: %s", e)
+        return False
+
+
 def find_terminal_with_claude() -> str:
     """Find a terminal window running Claude (cross-platform).
 
-    Returns the terminal app name or window identifier, or empty string if not found.
+    Returns the terminal app name or window identifier, or empty string if Claude
+    is not running in a terminal.
     """
+    if not is_claude_running_in_terminal():
+        logger.debug("Claude not running in a terminal (probably in Cursor/IDE)")
+        return ""
+
     try:
         if PLATFORM == "Darwin":
             for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
@@ -815,11 +846,11 @@ def find_terminal_with_claude() -> str:
                         ["osascript", "-e", f'tell application "System Events" to tell process "{app}" to get (count of windows)'],
                         capture_output=True, text=True, timeout=5
                     )
-                    if result.returncode == 0 and int(result.stdout.strip()) > 0:
+                    if result.returncode == 0 and result.stdout.strip() and int(result.stdout.strip()) > 0:
                         return app
                 except Exception:
                     continue
-            return "Terminal"
+            return ""
         elif PLATFORM == "Linux":
             terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm", "alacritty", "kitty", "terminator", "tilix"]
             if shutil.which("xdotool"):
@@ -836,7 +867,7 @@ def find_terminal_with_claude() -> str:
                     for term in terminals:
                         if term.lower() in result.stdout.lower():
                             return term
-            return "xterm"
+            return ""
         elif PLATFORM == "Windows":
             terminals = ["Windows Terminal", "Command Prompt", "PowerShell", "cmd"]
             try:
@@ -847,7 +878,7 @@ def find_terminal_with_claude() -> str:
                         return term
             except ImportError:
                 pass
-            return "cmd"
+            return ""
         else:
             return ""
     except Exception as e:
@@ -855,30 +886,86 @@ def find_terminal_with_claude() -> str:
         return ""
 
 
+def activate_terminal_with_claude() -> bool:
+    """Find and activate the terminal window running Claude (macOS).
+
+    Uses window title matching via System Events (no extra permissions needed).
+    Returns True if a Claude terminal window was found and activated.
+    """
+    if PLATFORM != "Darwin":
+        return False
+
+    for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
+        try:
+            applescript = f'''
+            tell application "System Events"
+                if exists process "{app}" then
+                    tell process "{app}"
+                        set windowList to every window
+                        repeat with aWindow in windowList
+                            if name of aWindow contains "claude" or name of aWindow contains "Claude" then
+                                perform action "AXRaise" of aWindow
+                                set frontmost to true
+                                return "{app}"
+                            end if
+                        end repeat
+                    end tell
+                end if
+            end tell
+            return ""
+            '''
+            result = subprocess.run(["osascript", "-e", applescript], capture_output=True, text=True, timeout=5)
+            if result.stdout.strip() == app:
+                logger.debug("Found Claude in %s window", app)
+                return True
+        except Exception as e:
+            logger.debug("Error checking %s: %s", app, e)
+            continue
+    return False
+
+
 def inject_into_terminal(text: str) -> bool:
     """Inject text into Terminal running Claude (cross-platform).
 
     Returns True if injection succeeded, False otherwise.
     """
-    target = find_terminal_with_claude()
-    if not target:
-        logger.warning("No terminal found")
+    if not is_claude_running_in_terminal():
+        logger.debug("Claude not running in a terminal")
         return False
 
-    logger.info("💉 Injecting into %s: %s", target, text[:50])
+    logger.info("💉 Injecting into terminal: %s", text[:50])
 
     if not copy_to_clipboard(text):
         logger.error("Failed to copy to clipboard")
         return False
 
-    activate_app(target)
-    time.sleep(0.5)
+    if PLATFORM == "Darwin":
+        if not activate_terminal_with_claude():
+            logger.warning("Could not find terminal window with Claude")
+            return False
+        time.sleep(0.3)
+    elif PLATFORM == "Linux":
+        target = find_terminal_with_claude()
+        if target:
+            activate_app(target)
+            time.sleep(0.5)
+        else:
+            logger.warning("No terminal with Claude found")
+            return False
+    elif PLATFORM == "Windows":
+        target = find_terminal_with_claude()
+        if target:
+            activate_app(target)
+            time.sleep(0.5)
+        else:
+            logger.warning("No terminal with Claude found")
+            return False
 
     if simulate_paste_and_enter():
-        logger.info("✅ Injected into %s", target)
+        logger.info("✅ Injected into terminal")
         return True
     else:
-        logger.error("Injection failed in %s", target)
+        logger.error("Injection failed")
         return False
 
 
