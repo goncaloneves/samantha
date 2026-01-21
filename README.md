@@ -200,18 +200,31 @@ For developers integrating Samantha:
 - **Silence detection**: 1 second threshold triggers message send
 - **Echo prevention**: Filters out TTS playback from mic input
 
-### How Injection Works
-
-When you speak to Samantha, your voice is transcribed and "injected" into Claude Code as if you typed it:
+### How It Works
 
 ```mermaid
-flowchart LR
-    A[🎙️ Mic<br>Record] --> B[Whisper<br>Transcribe]
-    B --> C[Clipboard<br>Copy]
-    C --> D[Activate<br>Target App]
-    D --> E[Paste +<br>Enter]
-    E --> F[Restore<br>Focus]
+flowchart TB
+    subgraph ACTIVE["🟢 ACTIVE - Listening for your voice"]
+        A[🎙️ Record] --> B[Whisper]
+        B --> C[Inject to Claude]
+        C --> D[Claude responds]
+        D --> E[🔊 TTS speaks]
+        E --> A
+    end
+
+    subgraph IDLE["💤 IDLE - Waiting for wake word"]
+        F[🎙️ Listening...]
+    end
+
+    IDLE -->|"Hey Samantha"| ACTIVE
+    ACTIVE -->|"Samantha sleep"| IDLE
+
+    START[/samantha:start/] --> IDLE
+    ACTIVE -->|/samantha:stop| STOP[Stopped]
+    IDLE -->|/samantha:stop| STOP
 ```
+
+**Injection flow**: When you speak, Samantha transcribes → copies to clipboard → activates target app → pastes + enters → restores focus.
 
 For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 
