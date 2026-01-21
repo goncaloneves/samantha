@@ -46,6 +46,9 @@ SKIP_WORDS = ['continue', 'skip']
 
 VOICE_MESSAGE_PREFIX = "[🎙️ Voice - samantha_speak]"
 
+DEFAULT_AI_PROCESS_PATTERN = "claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex"
+DEFAULT_AI_WINDOW_TITLES = ["claude", "gemini", "copilot", "aider", "chatgpt", "gpt"]
+
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
 # IDEs with Claude Code extension/plugin support (Cmd/Ctrl+Escape focuses Claude input)
@@ -79,4 +82,4 @@ IDE_PROCESS_NAMES = {
     ],
 }
 SUPPORTED_TERMINALS = ["Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
-SUPPORTED_APPS = SUPPORTED_IDES + ["Claude"] + SUPPORTED_TERMINALS
+SUPPORTED_APPS = SUPPORTED_IDES + SUPPORTED_TERMINALS

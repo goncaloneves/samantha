@@ -13,10 +13,10 @@ from samantha.injection.detection import (
     get_frontmost_app,
     activate_app,
     get_running_ide,
-    is_claude_process_running,
-    is_claude_running_in_terminal,
-    is_claude_running_in_ide_terminal,
-    activate_terminal_with_claude,
+    is_ai_process_running,
+    is_ai_running_in_terminal,
+    is_ai_running_in_ide_terminal,
+    activate_terminal_with_ai,
 )
 
 logger = logging.getLogger("samantha")
@@ -75,11 +75,11 @@ def simulate_paste_and_enter() -> bool:
         return False
 
 
-def focus_ide_claude_input(ide_name: str) -> bool:
-    """Focus IDE's Claude input field using Cmd/Ctrl+Escape (cross-platform).
+def focus_ide_ai_input(ide_name: str) -> bool:
+    """Focus IDE's AI input field using Cmd/Ctrl+Escape (cross-platform).
 
-    This shortcut toggles focus between the editor and Claude's prompt box.
-    Works with Cursor, VS Code, VSCodium, and other IDEs with Claude Code extension.
+    This shortcut toggles focus between the editor and the AI's prompt box.
+    Works with Cursor, VS Code, VSCodium, and other IDEs with AI extensions.
     """
     try:
         if PLATFORM == "Darwin":
@@ -133,7 +133,7 @@ def focus_ide_claude_input(ide_name: str) -> bool:
         else:
             return False
     except Exception as e:
-        logger.debug("Focus %s Claude input failed: %s", ide_name, e)
+        logger.debug("Focus %s AI input failed: %s", ide_name, e)
         return False
 
 
@@ -200,9 +200,9 @@ def focus_ide_terminal(ide_name: str) -> bool:
 
 
 def _try_inject_extension(ide_name: str, text: str) -> bool:
-    """Try to inject via Claude Code extension (Cmd+Escape)."""
-    if not is_claude_process_running():
-        logger.debug("Claude extension not running")
+    """Try to inject via AI extension (Cmd+Escape)."""
+    if not is_ai_process_running():
+        logger.debug("AI extension not running")
         return False
 
     logger.info("💉 Injecting into %s (extension mode): %s", ide_name, text[:50])
@@ -211,8 +211,8 @@ def _try_inject_extension(ide_name: str, text: str) -> bool:
         logger.error("Failed to copy to clipboard")
         return False
 
-    if not focus_ide_claude_input(ide_name):
-        logger.debug("Failed to focus %s Claude input", ide_name)
+    if not focus_ide_ai_input(ide_name):
+        logger.debug("Failed to focus %s AI input", ide_name)
         return False
 
     time.sleep(0.2)
@@ -227,8 +227,8 @@ def _try_inject_extension(ide_name: str, text: str) -> bool:
 
 def _try_inject_cli(ide_name: str, text: str) -> bool:
     """Try to inject via IDE's integrated terminal (Ctrl+`)."""
-    if not is_claude_running_in_ide_terminal(ide_name):
-        logger.debug("Claude CLI not running in %s terminal", ide_name)
+    if not is_ai_running_in_ide_terminal(ide_name):
+        logger.debug("AI CLI not running in %s terminal", ide_name)
         return False
 
     logger.info("💉 Injecting into %s terminal (CLI mode): %s", ide_name, text[:50])
@@ -283,12 +283,12 @@ def inject_into_ide(text: str) -> bool:
 
 
 def inject_into_terminal(text: str) -> bool:
-    """Inject text into Terminal running Claude (cross-platform).
+    """Inject text into Terminal running an AI CLI (cross-platform).
 
     Returns True if injection succeeded, False otherwise.
     """
-    if not is_claude_running_in_terminal():
-        logger.debug("Claude not running in a terminal")
+    if not is_ai_running_in_terminal():
+        logger.debug("AI not running in a terminal")
         return False
 
     logger.info("💉 Injecting into terminal: %s", text[:50])
@@ -297,8 +297,8 @@ def inject_into_terminal(text: str) -> bool:
         logger.error("Failed to copy to clipboard")
         return False
 
-    if not activate_terminal_with_claude():
-        logger.warning("Could not find terminal window with Claude")
+    if not activate_terminal_with_ai():
+        logger.warning("Could not find terminal window with AI")
         return False
 
     time.sleep(0.3)
@@ -334,12 +334,12 @@ def inject_into_app(text: str, log_type: str = None):
             success = True
             target_app = "Terminal"
         else:
-            logger.error("All injection methods failed - no Claude target found")
+            logger.error("All injection methods failed - no AI target found")
 
     if not success:
         try:
             with playback._tts_queue_lock:
-                playback._tts_text_queue.append("I couldn't find Claude running in any IDE or Terminal. Please make sure Claude is open.")
+                playback._tts_text_queue.append("I couldn't find an AI assistant running in any IDE or Terminal. Please make sure your AI is open.")
         except Exception:
             pass
         return

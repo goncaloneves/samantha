@@ -23,6 +23,8 @@ from .constants import (
     IDE_PROCESS_NAMES,
     SUPPORTED_TERMINALS,
     SUPPORTED_APPS,
+    DEFAULT_AI_PROCESS_PATTERN,
+    DEFAULT_AI_WINDOW_TITLES,
 )
 
 from .settings import (
@@ -39,6 +41,8 @@ from .settings import (
     get_deactivation_phrases,
     get_target_app,
     get_injection_mode,
+    get_ai_process_pattern,
+    get_ai_window_titles,
 )
 
 __all__ = [
@@ -65,6 +69,8 @@ __all__ = [
     "IDE_PROCESS_NAMES",
     "SUPPORTED_TERMINALS",
     "SUPPORTED_APPS",
+    "DEFAULT_AI_PROCESS_PATTERN",
+    "DEFAULT_AI_WINDOW_TITLES",
     # Settings
     "load_config",
     "get_config",
@@ -79,4 +85,6 @@ __all__ = [
     "get_deactivation_phrases",
     "get_target_app",
     "get_injection_mode",
+    "get_ai_process_pattern",
+    "get_ai_window_titles",
 ]

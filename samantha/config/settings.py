@@ -3,7 +3,13 @@
 import logging
 import os
 
-from .constants import CONFIG_FILE, DEFAULT_WAKE_WORDS, DEFAULT_DEACTIVATION_PHRASES
+from .constants import (
+    CONFIG_FILE,
+    DEFAULT_WAKE_WORDS,
+    DEFAULT_DEACTIVATION_PHRASES,
+    DEFAULT_AI_PROCESS_PATTERN,
+    DEFAULT_AI_WINDOW_TITLES,
+)
 
 logger = logging.getLogger("samantha")
 
@@ -143,3 +149,28 @@ def get_injection_mode() -> str:
     if isinstance(val, str) and val.strip().lower() in ("auto", "extension", "cli"):
         return val.strip().lower()
     return "auto"
+
+
+def get_ai_process_pattern() -> str:
+    """Get AI process detection pattern (regex).
+
+    Used to detect running AI CLI processes (Claude, Gemini, Copilot, etc.).
+    Pattern is used with grep -E for process matching.
+
+    Default: claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex
+    """
+    val = get_config("ai_process_pattern", DEFAULT_AI_PROCESS_PATTERN)
+    if isinstance(val, str) and val.strip():
+        return val.strip().lower()
+    return DEFAULT_AI_PROCESS_PATTERN
+
+
+def get_ai_window_titles() -> list[str]:
+    """Get AI window titles to search for.
+
+    Used to find terminal windows running AI CLIs by matching window titles.
+    """
+    val = get_config("ai_window_titles", None)
+    if isinstance(val, list):
+        return [t.lower() for t in val if isinstance(t, str)]
+    return DEFAULT_AI_WINDOW_TITLES

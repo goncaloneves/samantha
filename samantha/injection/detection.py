@@ -7,7 +7,13 @@ import shutil
 import subprocess
 import time
 
-from samantha.config import IDE_PROCESS_NAMES, get_target_app, SUPPORTED_TERMINALS
+from samantha.config import (
+    IDE_PROCESS_NAMES,
+    get_target_app,
+    SUPPORTED_TERMINALS,
+    get_ai_process_pattern,
+    get_ai_window_titles,
+)
 
 logger = logging.getLogger("samantha")
 
@@ -290,19 +296,25 @@ def is_ide_available() -> bool:
     return get_running_ide() is not None
 
 
-def is_claude_process_running() -> bool:
-    """Check if Claude Code process is running (cross-platform)."""
+def is_ai_process_running() -> bool:
+    """Check if any AI CLI process is running (cross-platform).
+
+    Uses ai_process_pattern config to match process names.
+    Default pattern matches: claude, gemini, copilot, aider, chatgpt, gpt, sgpt, codex
+    """
+    pattern = get_ai_process_pattern()
     try:
         if PLATFORM in ("Darwin", "Linux"):
             result = subprocess.run(
-                ["bash", "-c", "ps aux | grep -c '[c]laude.*stream-json'"],
+                ["bash", "-c", f"ps aux | grep -E '{pattern}' | grep -v grep | wc -l"],
                 capture_output=True, text=True, timeout=5
             )
             count = int(result.stdout.strip()) if result.stdout.strip() else 0
             return count > 0
         elif PLATFORM == "Windows":
+            pattern_windows = pattern.replace("|", "*' -or $_.ProcessName -like '*")
             result = subprocess.run(
-                ["powershell", "-Command", "Get-Process | Where-Object {$_.ProcessName -like '*claude*'} | Measure-Object | Select-Object -ExpandProperty Count"],
+                ["powershell", "-Command", f"Get-Process | Where-Object {{$_.ProcessName -like '*{pattern_windows}*'}} | Measure-Object | Select-Object -ExpandProperty Count"],
                 capture_output=True, text=True, timeout=5
             )
             count = int(result.stdout.strip()) if result.stdout.strip() else 0
@@ -310,55 +322,60 @@ def is_claude_process_running() -> bool:
         else:
             return False
     except Exception as e:
-        logger.debug("Claude process detection failed: %s", e)
+        logger.debug("AI process detection failed: %s", e)
         return False
 
 
-def is_claude_running_in_terminal() -> bool:
-    """Check if Claude is running in a real terminal (not Cursor/IDE extension).
+def is_ai_running_in_terminal() -> bool:
+    """Check if any AI CLI is running in a real terminal (not IDE extension).
 
-    Returns True if Claude has a real TTY (like ttys001), False if running in IDE (shows ??).
+    Returns True if an AI process has a real TTY (like ttys001), False if running in IDE (shows ??).
+    Uses ai_process_pattern config to match process names.
     """
+    pattern = get_ai_process_pattern()
     try:
         if PLATFORM in ("Darwin", "Linux"):
             result = subprocess.run(
-                ["bash", "-c", "ps aux | grep '[c]laude' | grep -v grep | awk '{print $7}' | grep -v '??' | head -1"],
+                ["bash", "-c", f"ps aux | grep -E '{pattern}' | grep -v grep | awk '{{print $7}}' | grep -v '??' | head -1"],
                 capture_output=True, text=True, timeout=5
             )
             tty = result.stdout.strip()
             return bool(tty and tty != "??")
         elif PLATFORM == "Windows":
+            pattern_windows = pattern.replace("|", "*' -or $_.ProcessName -like '*")
             result = subprocess.run(
-                ["powershell", "-Command", "Get-Process | Where-Object {$_.ProcessName -like '*claude*' -and $_.MainWindowHandle -ne 0} | Measure-Object | Select-Object -ExpandProperty Count"],
+                ["powershell", "-Command", f"Get-Process | Where-Object {{($_.ProcessName -like '*{pattern_windows}*') -and $_.MainWindowHandle -ne 0}} | Measure-Object | Select-Object -ExpandProperty Count"],
                 capture_output=True, text=True, timeout=5
             )
             count = int(result.stdout.strip()) if result.stdout.strip() else 0
             return count > 0
         return False
     except Exception as e:
-        logger.debug("Terminal Claude check failed: %s", e)
+        logger.debug("Terminal AI check failed: %s", e)
         return False
 
 
-def is_claude_running_in_ide_terminal(ide_name: str) -> bool:
-    """Check if Claude CLI is running specifically in the given IDE's integrated terminal.
+def is_ai_running_in_ide_terminal(ide_name: str) -> bool:
+    """Check if any AI CLI is running specifically in the given IDE's integrated terminal.
 
-    Traces the parent process tree of Claude CLI processes to see if they belong
+    Traces the parent process tree of AI CLI processes to see if they belong
     to the specified IDE (e.g., Cursor, Code, VS Code).
+    Uses ai_process_pattern config to match process names.
 
-    Returns True if Claude is running in that IDE's terminal, False otherwise.
+    Returns True if an AI CLI is running in that IDE's terminal, False otherwise.
     """
+    pattern = get_ai_process_pattern()
     try:
         if PLATFORM == "Darwin":
             result = subprocess.run(
-                ["bash", "-c", "ps aux | grep '[c]laude' | grep -v 'stream-json' | awk '{if($7 != \"??\") print $2}'"],
+                ["bash", "-c", f"ps aux | grep -E '{pattern}' | grep -v grep | awk '{{if($7 != \"??\") print $2}}'"],
                 capture_output=True, text=True, timeout=5
             )
             pids = result.stdout.strip().split('\n')
             pids = [p for p in pids if p]
 
             if not pids:
-                logger.debug("No Claude CLI with TTY found")
+                logger.debug("No AI CLI with TTY found")
                 return False
 
             ide_lower = ide_name.lower()
@@ -380,34 +397,34 @@ def is_claude_running_in_ide_terminal(ide_name: str) -> bool:
                     comm = comm_result.stdout.strip().lower()
 
                     if ide_lower in comm or f"{ide_lower} helper" in comm:
-                        logger.debug("Found Claude CLI in %s terminal (PID %s, parent %s: %s)", ide_name, pid, ppid, comm)
+                        logger.debug("Found AI CLI in %s terminal (PID %s, parent %s: %s)", ide_name, pid, ppid, comm)
                         return True
 
                     current_pid = ppid
 
-            logger.debug("Claude CLI not found in %s terminal", ide_name)
+            logger.debug("AI CLI not found in %s terminal", ide_name)
             return False
 
         elif PLATFORM == "Linux":
-            return is_claude_running_in_terminal()
+            return is_ai_running_in_terminal()
 
         elif PLATFORM == "Windows":
-            return is_claude_running_in_terminal()
+            return is_ai_running_in_terminal()
 
         return False
     except Exception as e:
-        logger.debug("IDE terminal Claude check failed: %s", e)
+        logger.debug("IDE terminal AI check failed: %s", e)
         return False
 
 
-def find_terminal_with_claude() -> str:
-    """Find a terminal window running Claude (cross-platform).
+def find_terminal_with_ai() -> str:
+    """Find a terminal window running an AI CLI (cross-platform).
 
-    Returns the terminal app name or window identifier, or empty string if Claude
-    is not running in a terminal.
+    Returns the terminal app name or window identifier, or empty string if no AI
+    is running in a terminal.
     """
-    if not is_claude_running_in_terminal():
-        logger.debug("Claude not running in a terminal (probably in Cursor/IDE)")
+    if not is_ai_running_in_terminal():
+        logger.debug("AI not running in a terminal (probably in IDE)")
         return ""
 
     try:
@@ -458,23 +475,26 @@ def find_terminal_with_claude() -> str:
         return ""
 
 
-def activate_terminal_with_claude() -> bool:
-    """Find and activate the terminal window running Claude (cross-platform).
+def activate_terminal_with_ai() -> bool:
+    """Find and activate the terminal window running an AI CLI (cross-platform).
 
-    Uses window title matching to find windows containing "claude" or "Claude".
-    Returns True if a Claude terminal window was found and activated.
+    Uses ai_window_titles config to find windows containing AI-related titles.
+    Returns True if an AI terminal window was found and activated.
     """
+    titles = get_ai_window_titles()
     try:
         if PLATFORM == "Darwin":
             for app in ["Terminal", "iTerm2", "iTerm", "Alacritty", "kitty", "Warp"]:
                 try:
+                    title_conditions = " or ".join([f'name of aWindow contains "{t}"' for t in titles])
+                    title_conditions_cap = " or ".join([f'name of aWindow contains "{t.capitalize()}"' for t in titles])
                     applescript = f'''
                     tell application "System Events"
                         if exists process "{app}" then
                             tell process "{app}"
                                 set windowList to every window
                                 repeat with aWindow in windowList
-                                    if name of aWindow contains "claude" or name of aWindow contains "Claude" then
+                                    if {title_conditions} or {title_conditions_cap} then
                                         perform action "AXRaise" of aWindow
                                         set frontmost to true
                                         return "{app}"
@@ -487,7 +507,7 @@ def activate_terminal_with_claude() -> bool:
                     '''
                     result = subprocess.run(["osascript", "-e", applescript], capture_output=True, text=True, timeout=5)
                     if result.stdout.strip() == app:
-                        logger.debug("Found Claude in %s window", app)
+                        logger.debug("Found AI in %s window", app)
                         return True
                 except Exception as e:
                     logger.debug("Error checking %s: %s", app, e)
@@ -496,24 +516,26 @@ def activate_terminal_with_claude() -> bool:
 
         elif PLATFORM == "Linux":
             if shutil.which("xdotool"):
-                result = subprocess.run(
-                    ["xdotool", "search", "--name", "claude"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    window_id = result.stdout.strip().split('\n')[0]
-                    subprocess.run(["xdotool", "windowactivate", window_id], timeout=5)
-                    logger.debug("Found Claude window via xdotool: %s", window_id)
-                    return True
+                for title in titles:
+                    result = subprocess.run(
+                        ["xdotool", "search", "--name", title],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        window_id = result.stdout.strip().split('\n')[0]
+                        subprocess.run(["xdotool", "windowactivate", window_id], timeout=5)
+                        logger.debug("Found AI window via xdotool: %s", window_id)
+                        return True
             if shutil.which("wmctrl"):
                 result = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
                     for line in result.stdout.strip().split('\n'):
-                        if 'claude' in line.lower():
-                            window_id = line.split()[0]
-                            subprocess.run(["wmctrl", "-i", "-a", window_id], timeout=5)
-                            logger.debug("Found Claude window via wmctrl: %s", window_id)
-                            return True
+                        for title in titles:
+                            if title in line.lower():
+                                window_id = line.split()[0]
+                                subprocess.run(["wmctrl", "-i", "-a", window_id], timeout=5)
+                                logger.debug("Found AI window via wmctrl: %s", window_id)
+                                return True
             return False
 
         elif PLATFORM == "Windows":
@@ -521,33 +543,36 @@ def activate_terminal_with_claude() -> bool:
                 import pygetwindow as gw
                 all_windows = gw.getAllWindows()
                 for window in all_windows:
-                    if window.title and ('claude' in window.title.lower()):
-                        window.activate()
-                        logger.debug("Found Claude window: %s", window.title)
-                        return True
+                    if window.title:
+                        for title in titles:
+                            if title in window.title.lower():
+                                window.activate()
+                                logger.debug("Found AI window: %s", window.title)
+                                return True
             except ImportError:
                 pass
             try:
+                title_pattern = "|".join([f"*{t}*" for t in titles])
                 result = subprocess.run(
-                    ["powershell", "-Command", '''
+                    ["powershell", "-Command", f'''
                     Add-Type @"
                     using System;
                     using System.Runtime.InteropServices;
-                    public class Win32 {
+                    public class Win32 {{
                         [DllImport("user32.dll")]
                         public static extern bool SetForegroundWindow(IntPtr hWnd);
-                    }
+                    }}
 "@
-                    $procs = Get-Process | Where-Object {$_.MainWindowTitle -like "*claude*"}
-                    if ($procs) {
+                    $procs = Get-Process | Where-Object {{$_.MainWindowTitle -like "{title_pattern}"}}
+                    if ($procs) {{
                         [Win32]::SetForegroundWindow($procs[0].MainWindowHandle)
                         Write-Output "Found"
-                    }
+                    }}
                     '''],
                     capture_output=True, text=True, timeout=5
                 )
                 if "Found" in result.stdout:
-                    logger.debug("Found Claude window via PowerShell")
+                    logger.debug("Found AI window via PowerShell")
                     return True
             except Exception:
                 pass
@@ -556,5 +581,5 @@ def activate_terminal_with_claude() -> bool:
         else:
             return False
     except Exception as e:
-        logger.debug("activate_terminal_with_claude error: %s", e)
+        logger.debug("activate_terminal_with_ai error: %s", e)
         return False
