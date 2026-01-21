@@ -66,7 +66,7 @@ claude mcp add samantha -- samantha
 | 1. **Listen** | Samantha listens in the background using WebRTC VAD |
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
 | 3. **Converse** | All speech is sent to Claude until deactivated |
-| 4. **End recording** | Say **"that's all"**, **"send it"**, or **"over and out"** to end your message |
+| 4. **Send message** | Say **"that's all"**, **"send it"**, or **"over and out"** to send your message |
 | 5. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" to go idle |
 | 6. **Skip** | Say **"continue"** or **"skip"** during TTS to skip to the next queued message |
 | 7. **Interrupt** | Say **"stop"**, **"quiet"**, **"enough"**, or **"halt"** during TTS to clear the queue |
@@ -76,7 +76,7 @@ claude mcp add samantha -- samantha
 ```
 /samantha:start          # Start voice mode
 "Hey Samantha, ..."      # Activate and speak
-"that's all"             # End recording and send message
+"that's all"             # Send message (stay active)
 "continue" / "skip"      # Skip to next message in queue
 "stop" / "quiet"         # Interrupt TTS and clear queue
 "Samantha sleep"         # Deactivate (go idle)
