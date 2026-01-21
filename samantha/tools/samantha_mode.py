@@ -122,6 +122,29 @@ def get_theodore_mode() -> bool:
     return str(val).lower() == "true"
 
 
+def get_min_audio_energy() -> int:
+    """Get minimum audio energy threshold for Whisper.
+
+    Filters out low-energy audio before sending to Whisper to prevent hallucinations.
+    Whisper can hallucinate phrases like "Thank you for watching" on silence/noise.
+
+    Recommended values (16-bit PCM, max 32768):
+    - 1500: Very sensitive, may pick up typing/background noise
+    - 3000: Balanced, filters typing but catches quiet speech (default)
+    - 5000: Conservative, requires clearer speech
+
+    Lower values needed for: headphones with mic, quiet environments
+    Higher values needed for: laptop mic, noisy environments, keyboard nearby
+    """
+    val = get_config("min_audio_energy", 3000)
+    if isinstance(val, int):
+        return val
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return 3000
+
+
 DEFAULT_WAKE_WORDS = [
     "samantha", "hey samantha", "hi samantha", "hello samantha", "ok samantha", "okay samantha",
     "samanta", "samanthia", "samansa", "cemantha", "somantha", "semantha",
@@ -1323,17 +1346,15 @@ _tts_start_time = 0
 _tts_interrupt = False
 
 
-MIN_AUDIO_ENERGY = 1500
-
-
 def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
     """Synchronous transcribe for use in thread."""
     try:
         import requests
 
+        min_energy = get_min_audio_energy()
         max_energy = np.max(np.abs(audio_data))
-        if max_energy < MIN_AUDIO_ENERGY:
-            logger.debug("Audio energy: %d (threshold: %d) - skipping Whisper", max_energy, MIN_AUDIO_ENERGY)
+        if max_energy < min_energy:
+            logger.debug("Audio energy: %d (threshold: %d) - skipping Whisper", max_energy, min_energy)
             return None
 
         audio_data = normalize_audio(audio_data)
@@ -1348,7 +1369,7 @@ def transcribe_audio_sync(audio_data: np.ndarray) -> Optional[str]:
         if response.status_code == 200:
             result = response.json()
             text = result.get("text", "").strip()
-            logger.debug("Audio energy: %d (threshold: %d) - Whisper heard: %s", max_energy, MIN_AUDIO_ENERGY, text[:50] if text else "(empty)")
+            logger.debug("Audio energy: %d (threshold: %d) - Whisper heard: %s", max_energy, min_energy, text[:50] if text else "(empty)")
             return text
     except Exception as e:
         logger.debug("STT error: %s", e)

@@ -113,6 +113,7 @@ samantha-install download-model small  # Download additional Whisper model
 | `SAMANTHA_SHOW_STATUS` | Show status messages (activated/deactivated/interrupted) | `true` |
 | `SAMANTHA_THEODORE` | Call user "Theodore" (from the movie Her); if false, use gender-neutral language | `true` |
 | `SAMANTHA_RESTORE_FOCUS` | Restore focus to previous app after injection | `true` |
+| `SAMANTHA_MIN_AUDIO_ENERGY` | Minimum audio energy to send to Whisper (see below) | `3000` |
 
 ### Config File
 
@@ -127,7 +128,8 @@ Create `~/.samantha/config.json` for easy customization:
   "input_device": null,
   "output_device": null,
   "theodore": true,
-  "restore_focus": true
+  "restore_focus": true,
+  "min_audio_energy": 3000
 }
 ```
 
@@ -146,7 +148,23 @@ export SAMANTHA_INPUT_DEVICE="2"   # Use `python -m sounddevice` to list devices
 export SAMANTHA_OUTPUT_DEVICE="0"  # Audio output device (null = system default, dynamic)
 export SAMANTHA_THEODORE="true"    # Set to "false" for gender-neutral language
 export SAMANTHA_RESTORE_FOCUS="true"  # Return to previous app after injection
+export SAMANTHA_MIN_AUDIO_ENERGY="3000"  # Audio energy threshold (see below)
 ```
+
+### Audio Energy Threshold
+
+The `min_audio_energy` setting filters low-energy audio before sending to Whisper. This prevents Whisper from hallucinating phrases like "Thank you for watching" on silence or background noise.
+
+**Why this matters:** Whisper can produce confident transcriptions from pure noise. Without filtering, keyboard typing, mouse clicks, or ambient sounds can trigger false transcriptions.
+
+**Recommended values** (16-bit PCM scale, max 32768):
+| Value | Use Case |
+|-------|----------|
+| `1500` | Headset mic in quiet environment |
+| `3000` | Balanced - laptop mic, filters typing (default) |
+| `5000` | Noisy environment, requires clearer speech |
+
+**How to tune:** Run Samantha and check logs for "Audio energy: X" messages. Your speech should be well above the threshold, while silence/typing should be below.
 
 ### Voice Options
 
@@ -195,7 +213,7 @@ Samantha tries IDEs first (using Cmd/Ctrl+Escape to focus Claude input), then fa
 ## 🔬 Technical Details
 
 - **VAD**: WebRTC VAD with aggressiveness level 1 for responsive speech detection
-- **Audio filtering**: Energy threshold (1500) filters low-amplitude noise before Whisper
+- **Audio filtering**: Energy threshold (default 3000) filters noise before Whisper to prevent hallucinations
 - **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
 - **TTS**: Kokoro via sounddevice (uses system default output)
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
