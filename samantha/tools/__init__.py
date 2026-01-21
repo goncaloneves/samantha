@@ -1,3 +1,3 @@
 """Samantha voice mode tools."""
 
-from . import samantha_mode
+from . import samantha_tools

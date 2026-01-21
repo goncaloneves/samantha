@@ -15,7 +15,6 @@ from fastmcp import FastMCP
 
 mcp = FastMCP("samantha")
 
-from . import config
 from . import tools
 from . import prompts
 from . import resources
@@ -25,7 +24,7 @@ def main():
     """Run the Samantha MCP server."""
     import sys
     import warnings
-    from .config import setup_logging
+    from .logging_setup import setup_logging
     from .version import __version__
 
     warnings.filterwarnings("ignore", category=SyntaxWarning, module="pydub.utils")

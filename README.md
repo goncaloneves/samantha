@@ -21,6 +21,30 @@ Samantha enables hands-free voice conversations with Claude Code. Just say **"He
 - **Voice control** - Interrupt, skip, or put her to sleep with voice commands
 - **Cross-platform** - Works on macOS, Linux, and Windows
 
+### How It Works
+
+```mermaid
+graph TB
+    START([Start]) -->|/samantha start| IDLE
+
+    subgraph IDLE[💤 Idle]
+        I[Listening for wake word]
+    end
+
+    subgraph ACTIVE[🟢 Active - Listening]
+        A1[🎙️ Record] --> A2[Transcribe]
+        A2 --> A3[Inject to Claude]
+        A3 --> A4[Claude responds]
+        A4 --> A5[🔊 TTS speaks]
+        A5 --> A1
+    end
+
+    IDLE -->|Hey Samantha| ACTIVE
+    ACTIVE -->|Samantha sleep| IDLE
+    IDLE -->|/samantha stop| STOP([Stopped])
+    ACTIVE -->|/samantha stop| STOP
+```
+
 ## 🚀 Quick Start
 
 ### 1. Install Samantha
@@ -200,30 +224,6 @@ For developers integrating Samantha:
 - **Audio**: Records at 24kHz, resamples to 16kHz for processing
 - **Silence detection**: 1 second threshold triggers message send
 - **Echo prevention**: Filters out TTS playback from mic input
-
-### How It Works
-
-```mermaid
-graph TB
-    START([Start]) -->|/samantha start| IDLE
-
-    subgraph IDLE[💤 Idle]
-        I[Listening for wake word]
-    end
-
-    subgraph ACTIVE[🟢 Active - Listening]
-        A1[🎙️ Record] --> A2[Transcribe]
-        A2 --> A3[Inject to Claude]
-        A3 --> A4[Claude responds]
-        A4 --> A5[🔊 TTS speaks]
-        A5 --> A1
-    end
-
-    IDLE -->|Hey Samantha| ACTIVE
-    ACTIVE -->|Samantha sleep| IDLE
-    IDLE -->|/samantha stop| STOP([Stopped])
-    ACTIVE -->|/samantha stop| STOP
-```
 
 For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 

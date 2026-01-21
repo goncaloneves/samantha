@@ -1,14 +1,8 @@
-"""Minimal configuration for Samantha voice mode."""
+"""Logging setup for Samantha voice mode."""
 
-import os
 import logging
-from pathlib import Path
 
-SAMANTHA_DIR = Path.home() / ".samantha"
-SAMANTHA_DIR.mkdir(parents=True, exist_ok=True)
-
-LOG_LEVEL = os.getenv("SAMANTHA_LOG_LEVEL", "DEBUG")
-LOG_FILE = SAMANTHA_DIR / "samantha.log"
+from samantha.config import LOG_FILE, LOG_LEVEL
 
 logger = logging.getLogger("samantha")
 
