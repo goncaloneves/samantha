@@ -151,11 +151,9 @@ export SAMANTHA_RESTORE_FOCUS="true"  # Return to previous app after injection
 export SAMANTHA_MIN_AUDIO_ENERGY="3000"  # Audio energy threshold (see below)
 ```
 
-### Audio Energy Threshold
+### Always-On Recording (No Headphones Required)
 
-The `min_audio_energy` setting filters low-energy audio before sending to Whisper. This prevents Whisper from hallucinating phrases like "Thank you for watching" on silence or background noise.
-
-**Why this matters:** Whisper can produce confident transcriptions from pure noise. Without filtering, keyboard typing, mouse clicks, or ambient sounds can trigger false transcriptions.
+Samantha works great with your laptop's built-in microphone - no headphones or external mic needed. The `min_audio_energy` setting intelligently filters background noise so you can type, click, and work normally while Samantha listens for your voice.
 
 **Recommended values** (16-bit PCM scale, max 32768):
 | Value | Use Case |
