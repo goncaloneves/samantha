@@ -198,19 +198,27 @@ By default, Samantha auto-detects which app to use (IDEs preferred over terminal
 
 ## 🤖 Multi-AI Support
 
-Samantha works with any AI CLI that supports MCP (Model Context Protocol):
+**By default, Samantha works with ALL major AI CLIs** - no configuration needed:
 
-| AI Tool | Command | Installation |
-|---------|---------|--------------|
-| **Claude Code** | `claude` | `claude mcp add samantha -- samantha` |
-| **Gemini CLI** | `gemini` | `gemini mcp add samantha -- samantha` |
-| **GitHub Copilot** | `copilot` | Add to MCP config |
-| **Aider** | `aider` | Add to MCP config |
-| **ChatGPT CLI** | `chatgpt` | Add to MCP config |
+| AI Tool | Command | Auto-detected? |
+|---------|---------|----------------|
+| **Claude Code** | `claude` | ✅ Yes |
+| **Gemini CLI** | `gemini` | ✅ Yes |
+| **GitHub Copilot** | `copilot` | ✅ Yes |
+| **Aider** | `aider` | ✅ Yes |
+| **ChatGPT CLI** | `chatgpt` | ✅ Yes |
+| **ShellGPT** | `sgpt` | ✅ Yes |
+| **OpenAI Codex** | `codex` | ✅ Yes |
 
 ### How It Works
 
-Samantha automatically detects which AI is running by matching process names. The default pattern matches: `claude`, `gemini`, `copilot`, `aider`, `chatgpt`, `gpt`, `sgpt`, `codex`.
+Out of the box, Samantha detects **any** of these AIs automatically. The default pattern is:
+
+```
+claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex
+```
+
+**You don't need to configure anything** - just install Samantha, add it to your AI's MCP config, and it will detect whichever AI you're running.
 
 ### Custom AI Configuration
 
