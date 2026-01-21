@@ -1,4 +1,4 @@
-# Samantha - Voice Assistant for Claude Code
+# Samantha - Voice Assistant for AI Coding Tools
 
 ## Samantha Persona (Voice Mode Only)
 
@@ -38,7 +38,7 @@ When speaking via voice, embody **Samantha from the movie "Her"**:
 
 ## Project Overview
 
-Samantha is a voice assistant MCP server for Claude Code with wake word detection. Say "Hey Samantha" anywhere in your speech to activate hands-free voice mode.
+Samantha is a voice assistant MCP server for AI coding tools (Claude, Gemini, Copilot, Aider, and more) with wake word detection. Say "Hey Samantha" anywhere in your speech to activate hands-free voice mode.
 
 ## Structure
 
@@ -88,7 +88,11 @@ Create `~/.samantha/config.json` for easy customization:
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha", "sam bye"],
   "show_status": true,
-  "input_device": null
+  "input_device": null,
+  "target_app": null,
+  "injection_mode": "auto",
+  "ai_process_pattern": "claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex",
+  "ai_window_titles": ["claude", "gemini", "copilot", "aider", "chatgpt", "gpt"]
 }
 ```
 
@@ -102,6 +106,9 @@ Config file values take precedence over environment variables.
 | `SAMANTHA_DEACTIVATION_WORDS` | Deactivation phrases | `samantha sleep,goodbye samantha,...` |
 | `SAMANTHA_VOICE` | Kokoro TTS voice | `af_sky` |
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
+| `SAMANTHA_INJECTION_MODE` | `auto`, `extension`, or `cli` | `auto` |
+| `SAMANTHA_AI_PROCESS_PATTERN` | Regex to detect AI CLIs | `claude\|gemini\|copilot\|...` |
+| `SAMANTHA_AI_WINDOW_TITLES` | Window titles to search | `claude,gemini,...` |
 | `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default |
 | `SAMANTHA_OUTPUT_DEVICE` | Audio output device index | System default |
 | `SAMANTHA_SHOW_STATUS` | Show status messages in chat | `true` |
