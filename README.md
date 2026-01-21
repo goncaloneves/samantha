@@ -65,21 +65,21 @@ claude mcp add samantha -- samantha
 |------|-------------|
 | 1. **Listen** | Samantha listens in the background using WebRTC VAD |
 | 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
-| 3. **Converse** | All speech is sent to Claude until deactivated |
-| 4. **Finish message** | Say **"that's all"**, **"send it"**, or **"over and out"** to send immediately |
+| 3. **Converse** | Speak naturally - messages are sent automatically after 1 second of silence |
+| 4. **Finish early** | *(Optional)* Say **"that's all"** or **"send it"** to send without waiting for silence |
 | 5. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" to go idle |
-| 6. **Skip** | Say **"continue"** or **"skip"** during TTS to skip to the next queued message |
-| 7. **Interrupt** | Say **"stop"**, **"quiet"**, **"enough"**, or **"halt"** during TTS to clear the queue |
+| 6. **Skip** | Say **"skip"** or **"continue"** during TTS to skip to next message |
+| 7. **Interrupt** | Say **"stop"** or **"quiet"** during TTS to stop and clear queue |
 
 ## 🎯 Usage
 
 ```
 /samantha:start          # Start voice mode
-"Hey Samantha, ..."      # Activate and speak
-"that's all"             # Finish message (send immediately)
-"continue" / "skip"      # Skip to next message in queue
-"stop" / "quiet"         # Interrupt TTS and clear queue
-"Samantha sleep"         # Deactivate (go idle)
+"Hey Samantha, ..."      # Activate and speak (auto-sends after 1s silence)
+"that's all"             # (Optional) Send immediately without waiting
+"skip" / "continue"      # Skip to next TTS message
+"stop" / "quiet"         # Stop TTS and clear queue
+"Samantha sleep"         # Deactivate (go idle, keeps listening for wake word)
 /samantha:stop           # Stop voice mode completely
 ```
 
