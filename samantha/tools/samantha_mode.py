@@ -150,13 +150,35 @@ SKIP_WORDS = ['continue', 'skip']
 
 WHISPER_SOUND_PATTERN = re.compile(r'\[.*?\]|\(.*?\)|♪+', re.IGNORECASE)
 
-# IDEs with Claude Code extension support (Cmd/Ctrl+Escape focuses Claude input)
-SUPPORTED_IDES = ["Cursor", "Code", "Visual Studio Code", "VSCodium", "Windsurf"]
+# IDEs with Claude Code extension/plugin support (Cmd/Ctrl+Escape focuses Claude input)
+# VS Code family: VS Code, Cursor, Windsurf
+# JetBrains family: IntelliJ IDEA, PyCharm, WebStorm, PhpStorm, GoLand, RubyMine, CLion, Rider, DataGrip, Android Studio
+SUPPORTED_IDES = ["Cursor", "Code", "Visual Studio Code", "Windsurf",
+                  "IntelliJ IDEA", "PyCharm", "WebStorm", "PhpStorm", "GoLand",
+                  "RubyMine", "CLion", "Rider", "DataGrip", "Android Studio"]
 # Process names vary by platform - these are used for detection
 IDE_PROCESS_NAMES = {
-    "Darwin": ["Cursor", "Code", "Code - Insiders", "VSCodium", "Windsurf"],
-    "Linux": ["cursor", "code", "code-insiders", "vscodium", "windsurf"],
-    "Windows": ["Cursor", "Code", "Code - Insiders", "VSCodium", "Windsurf"],
+    "Darwin": [
+        # VS Code family
+        "Cursor", "Code", "Code - Insiders", "Windsurf",
+        # JetBrains family (macOS app names)
+        "IntelliJ IDEA", "PyCharm", "WebStorm", "PhpStorm", "GoLand",
+        "RubyMine", "CLion", "Rider", "DataGrip", "Android Studio",
+    ],
+    "Linux": [
+        # VS Code family
+        "cursor", "code", "code-insiders", "windsurf",
+        # JetBrains family (Linux process names)
+        "idea", "pycharm", "webstorm", "phpstorm", "goland",
+        "rubymine", "clion", "rider", "datagrip", "studio",
+    ],
+    "Windows": [
+        # VS Code family
+        "Cursor", "Code", "Code - Insiders", "Windsurf",
+        # JetBrains family (Windows process names)
+        "idea64", "pycharm64", "webstorm64", "phpstorm64", "goland64",
+        "rubymine64", "clion64", "rider64", "datagrip64", "studio64",
+    ],
 }
 SUPPORTED_TERMINALS = ["Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
 SUPPORTED_APPS = SUPPORTED_IDES + ["Claude"] + SUPPORTED_TERMINALS

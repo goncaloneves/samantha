@@ -184,7 +184,7 @@ samantha-install download-model medium  # Better accuracy (1.5GB)
 
 ### Supported Apps
 
-**IDEs** (with Claude Code extension): Cursor, VS Code, VS Code Insiders, VSCodium, Windsurf
+**IDEs** (with Claude Code extension/plugin): Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
 
 **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, gnome-terminal, konsole, xfce4-terminal, xterm, Windows Terminal, PowerShell, cmd
 
@@ -216,7 +216,7 @@ When you speak to Samantha, your voice is transcribed and "injected" into the ta
                                           xclip              to focus              Return           previous app
 ```
 
-**Cursor-specific**: When injecting into Cursor, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
+**IDE-specific**: When injecting into an IDE (Cursor, VS Code, JetBrains), Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 
 This clipboard-based approach works reliably across all supported apps without requiring app-specific APIs.
 
