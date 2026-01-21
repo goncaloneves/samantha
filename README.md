@@ -92,7 +92,7 @@ Create `~/.samantha/config.json` to customize:
 
 ```json
 {
-  "voice": "af_sky",
+  "voice": "af_aoede",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
   "show_status": true,
@@ -106,7 +106,7 @@ Create `~/.samantha/config.json` to customize:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `voice` | TTS voice to use | `af_sky` |
+| `voice` | TTS voice to use | `af_aoede` |
 | `wake_words` | Phrases that activate Samantha | `hey samantha`, `samantha` |
 | `deactivation_words` | Phrases that put Samantha to sleep | `samantha sleep`, `goodbye samantha` |
 | `show_status` | Announce when activated/deactivated | `true` |
@@ -121,7 +121,7 @@ Create `~/.samantha/config.json` to customize:
 All settings can also be set via environment variables with the `SAMANTHA_` prefix:
 
 ```bash
-export SAMANTHA_VOICE="af_sky"
+export SAMANTHA_VOICE="af_aoede"
 export SAMANTHA_WAKE_WORDS="hey sam,sam"
 export SAMANTHA_THEODORE="false"  # Use gender-neutral language
 ```
@@ -130,7 +130,7 @@ Config file takes precedence over environment variables.
 
 ### Voice Options
 
-Available voices: `af_sky` (default), `af_aoede`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`
+Available voices: `af_aoede` (default), `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`
 
 ### Always-On Recording (No Headphones Required)
 

@@ -79,7 +79,7 @@ def get_config(key: str, default=None):
 
 
 def get_voice() -> str:
-    return get_config("voice", "af_sky")
+    return get_config("voice", "af_aoede")
 
 
 def get_input_device():
