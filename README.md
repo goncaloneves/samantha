@@ -203,23 +203,25 @@ For developers integrating Samantha:
 ### How It Works
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Idle: /samantha:start
+graph TB
+    START([Start]) -->|/samantha start| IDLE
 
-    Idle --> Active: "Hey Samantha"
-    Active --> Idle: "Samantha sleep"
+    subgraph IDLE[💤 Idle]
+        I[Listening for wake word]
+    end
 
-    Idle --> [*]: /samantha:stop
-    Active --> [*]: /samantha:stop
+    subgraph ACTIVE[🟢 Active]
+        A1[🎙️ Record] --> A2[Transcribe]
+        A2 --> A3[Inject to Claude]
+        A3 --> A4[Claude responds]
+        A4 --> A5[🔊 TTS speaks]
+        A5 --> A1
+    end
 
-    state Active {
-        [*] --> Record
-        Record --> Transcribe
-        Transcribe --> Inject
-        Inject --> Respond
-        Respond --> Speak
-        Speak --> Record
-    }
+    IDLE -->|Hey Samantha| ACTIVE
+    ACTIVE -->|Samantha sleep| IDLE
+    IDLE -->|/samantha stop| STOP([Stopped])
+    ACTIVE -->|/samantha stop| STOP
 ```
 
 For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
