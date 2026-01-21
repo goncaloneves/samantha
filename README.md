@@ -8,178 +8,169 @@
 
 ---
 
-Samantha enables hands-free voice conversations with Claude Code. Say **"Hey Samantha"** anywhere in your speech to activate.
+Samantha enables hands-free voice conversations with Claude Code. Just say **"Hey Samantha"** to start talking, and **"Samantha sleep"** when you're done.
 
 > 🙏 Thanks to [Mike Bailey](https://github.com/mbailey) for creating [VoiceMode](https://github.com/mbailey/voicemode) - the original project this is based on.
 
 ## ✨ Features
 
-- **Wake word activation** - Say "Hey Samantha" to start
-- **Continuous conversation** - Stay active until you say goodbye
-- **Natural TTS responses** - Powered by Kokoro with multiple voice options
-- **Interrupt support** - Say "stop", "quiet", "enough", or "halt" to interrupt TTS
+- **Wake word activation** - Say "Hey Samantha" to start talking
+- **Always listening** - Works with your laptop mic, no headphones needed
+- **Natural conversation** - Speak freely, pauses are detected automatically
+- **Voice control** - Interrupt, skip, or put her to sleep with voice commands
 - **Cross-platform** - Works on macOS, Linux, and Windows
 
 ## 🚀 Quick Start
 
-### Installation
+### 1. Install Samantha
 
-**Option 1: Install from GitHub (recommended)**
 ```bash
 pip install git+https://github.com/goncaloneves/samantha.git
 ```
 
-**Option 2: Clone and install locally**
-```bash
-git clone https://github.com/goncaloneves/samantha.git
-cd samantha
-pip install -e .
-```
+### 2. Install Voice Services
 
-### Install Voice Services
-
-Install local Whisper STT and Kokoro TTS:
 ```bash
 samantha-install install
 ```
 
-This clones, builds, and configures:
-- **Whisper** - Local speech-to-text (runs on localhost:2022)
-- **Kokoro** - Local text-to-speech (runs on localhost:8880)
+This installs local speech recognition (Whisper) and text-to-speech (Kokoro).
 
-Options:
-```bash
-samantha-install install -m base      # Use smaller/faster Whisper model (142MB)
-samantha-install install --force      # Reinstall everything
-```
-
-### Add to Claude Code
+### 3. Add to Claude Code
 
 ```bash
 claude mcp add samantha -- samantha
 ```
 
-## 📖 How It Works
+### 4. Start Talking
 
-| Step | Description |
-|------|-------------|
-| 1. **Listen** | Samantha listens in the background using WebRTC VAD |
-| 2. **Activate** | Say "Hey Samantha" anywhere in your sentence |
-| 3. **Converse** | Speak naturally - messages are sent automatically after 1 second of silence |
-| 4. **Finish early** | *(Optional)* Say **"that's all"** or **"send it"** to send without waiting for silence |
-| 5. **Deactivate** | Say "Samantha sleep" or "Goodbye Samantha" to go idle |
-| 6. **Skip** | Say **"skip"** or **"continue"** during TTS to skip to next message |
-| 7. **Interrupt** | Say **"stop"** or **"quiet"** during TTS to stop and clear queue |
+In Claude Code, type `/samantha:start` to begin. Then just say **"Hey Samantha"** followed by your question or request.
 
-## 🎯 Usage
+## 📖 How to Use Samantha
+
+### Starting a Conversation
+
+1. **Start voice mode**: Type `/samantha:start` in Claude Code
+2. **Activate**: Say **"Hey Samantha"** (or just **"Samantha"**) anywhere in your sentence
+3. **Speak**: Talk naturally - your message is sent after 1 second of silence
+4. **Listen**: Samantha responds via voice
+
+### During a Conversation
+
+Once activated, Samantha stays active and listens for your next message. You don't need to say "Hey Samantha" again until you put her to sleep.
+
+| Say this... | To do this... |
+|-------------|---------------|
+| *"that's all"* or *"send it"* | Send your message immediately (without waiting for silence) |
+| *"skip"* or *"continue"* | Skip to the next part of a long response |
+| *"stop"* or *"quiet"* | Stop speaking and cancel any remaining response |
+
+### Ending a Conversation
+
+| Say this... | What happens |
+|-------------|--------------|
+| **"Samantha sleep"** or **"Goodbye Samantha"** | Samantha goes idle but keeps listening for "Hey Samantha" |
+| Type `/samantha:stop` | Stops voice mode completely (stops listening) |
+
+**The difference**: "Samantha sleep" lets you reactivate anytime by saying "Hey Samantha" again. `/samantha:stop` turns off voice mode entirely.
+
+## 🎯 Quick Reference
 
 ```
-/samantha:start          # Start voice mode
-"Hey Samantha, ..."      # Activate and speak (auto-sends after 1s silence)
-"that's all"             # (Optional) Send immediately without waiting
-"skip" / "continue"      # Skip to next TTS message
-"stop" / "quiet"         # Stop TTS and clear queue
-"Samantha sleep"         # Deactivate (go idle, keeps listening for wake word)
-/samantha:stop           # Stop voice mode completely
+/samantha:start              # Start voice mode (begin listening)
+"Hey Samantha, ..."          # Activate and speak
+"that's all"                 # Send message immediately
+"skip"                       # Skip current TTS segment
+"stop"                       # Stop TTS completely
+"Samantha sleep"             # Go idle (still listening for wake word)
+/samantha:stop               # Stop voice mode completely
 ```
-
-### CLI Commands
-
-```bash
-samantha-install install    # Install Whisper + Kokoro
-samantha-install status     # Check service status
-samantha-install download-model small  # Download additional Whisper model
-```
-
-## 🔧 MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `samantha_start` | Start continuous listening |
-| `samantha_stop` | Stop voice mode |
-| `samantha_speak` | Speak text via TTS |
-| `samantha_status` | Check if voice mode is active |
 
 ## ⚙️ Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SAMANTHA_WAKE_WORDS` | Comma-separated activation phrases | `hey samantha,samantha,...` |
-| `SAMANTHA_DEACTIVATION_WORDS` | Comma-separated deactivation phrases | `samantha sleep,goodbye samantha,...` |
-| `SAMANTHA_VOICE` | TTS voice to use | `af_aoede` |
-| `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
-| `SAMANTHA_INPUT_DEVICE` | Audio input device index | System default (dynamic) |
-| `SAMANTHA_OUTPUT_DEVICE` | Audio output device index | System default (dynamic) |
-| `SAMANTHA_SHOW_STATUS` | Show status messages (activated/deactivated/interrupted) | `true` |
-| `SAMANTHA_THEODORE` | Call user "Theodore" (from the movie Her); if false, use gender-neutral language | `true` |
-| `SAMANTHA_RESTORE_FOCUS` | Restore focus to previous app after injection | `true` |
-| `SAMANTHA_MIN_AUDIO_ENERGY` | Minimum audio energy to send to Whisper (see below) | `3000` |
-
-### Config File
-
-Create `~/.samantha/config.json` for easy customization:
+Create `~/.samantha/config.json` to customize:
 
 ```json
 {
   "voice": "af_aoede",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
-  "deactivation_words": ["samantha sleep", "goodbye samantha", "sam bye"],
+  "deactivation_words": ["samantha sleep", "goodbye samantha"],
   "show_status": true,
-  "input_device": null,
-  "output_device": null,
   "theodore": true,
   "restore_focus": true,
   "min_audio_energy": 3000
 }
 ```
 
-Config file values take precedence over environment variables.
+### Settings Explained
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `voice` | TTS voice to use | `af_aoede` |
+| `wake_words` | Phrases that activate Samantha | `hey samantha`, `samantha` |
+| `deactivation_words` | Phrases that put Samantha to sleep | `samantha sleep`, `goodbye samantha` |
+| `show_status` | Announce when activated/deactivated | `true` |
+| `theodore` | Call you "Theodore" like in the movie | `true` |
+| `restore_focus` | Return to your previous app after injection | `true` |
+| `min_audio_energy` | Audio threshold to filter background noise | `3000` |
+| `input_device` | Microphone device index | System default |
+| `output_device` | Speaker device index | System default |
 
 ### Environment Variables
 
-Alternatively, use environment variables:
+All settings can also be set via environment variables with the `SAMANTHA_` prefix:
 
 ```bash
 export SAMANTHA_VOICE="af_aoede"
-export SAMANTHA_WAKE_WORDS="hey sam,hi sam,sam"
-export SAMANTHA_DEACTIVATION_WORDS="sam sleep,bye sam"
-export SAMANTHA_SHOW_STATUS="false"
-export SAMANTHA_INPUT_DEVICE="2"   # Use `python -m sounddevice` to list devices
-export SAMANTHA_OUTPUT_DEVICE="0"  # Audio output device (null = system default, dynamic)
-export SAMANTHA_THEODORE="true"    # Set to "false" for gender-neutral language
-export SAMANTHA_RESTORE_FOCUS="true"  # Return to previous app after injection
-export SAMANTHA_MIN_AUDIO_ENERGY="3000"  # Audio energy threshold (see below)
+export SAMANTHA_WAKE_WORDS="hey sam,sam"
+export SAMANTHA_THEODORE="false"  # Use gender-neutral language
 ```
+
+Config file takes precedence over environment variables.
+
+### Voice Options
+
+Available voices: `af_aoede` (default), `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`
 
 ### Always-On Recording (No Headphones Required)
 
 Samantha works great with your laptop's built-in microphone - no headphones or external mic needed. The `min_audio_energy` setting intelligently filters background noise so you can type, click, and work normally while Samantha listens for your voice.
 
-**Recommended values** (16-bit PCM scale, max 32768):
 | Value | Use Case |
 |-------|----------|
 | `1500` | Headset mic in quiet environment |
-| `3000` | Balanced - laptop mic, filters typing (default) |
+| `3000` | Laptop mic, filters typing noise (default) |
 | `5000` | Noisy environment, requires clearer speech |
 
-**How to tune:** Run Samantha and check logs for "Audio energy: X" messages. Your speech should be well above the threshold, while silence/typing should be below.
+## 🖥️ Platform Support
 
-### Voice Options
+| Platform | Status |
+|----------|--------|
+| **macOS** | Full support |
+| **Linux (X11)** | Full support (requires `xclip`, `xdotool`) |
+| **Linux (Wayland)** | Partial support (requires `wl-copy`, `ydotool`) |
+| **Windows** | Full support |
+
+### Supported Apps
+
+Samantha can inject your voice commands into:
+
+- **IDEs with Claude Code**: Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
+- **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, and more
+
+Samantha automatically detects which app to use. IDEs are preferred when available.
+
+## 🔧 CLI Commands
 
 ```bash
-export SAMANTHA_VOICE="af_aoede"  # Expressive voice inspired by the Greek muse of song
+samantha-install install              # Install Whisper + Kokoro
+samantha-install install -m base      # Use smaller Whisper model (142MB)
+samantha-install install --force      # Reinstall everything
+samantha-install status               # Check service status
+samantha-install download-model medium  # Download different Whisper model
 ```
 
-Available voices: `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_aoede`, `af_kore`, `bf_emma`, `bf_isabella`
-
-### Whisper Model Selection
-
-The default model is `small` (466MB) which provides good accuracy. To download additional models:
-
-```bash
-samantha-install download-model base    # Smaller/faster (142MB)
-samantha-install download-model medium  # Better accuracy (1.5GB)
-```
+### Whisper Models
 
 | Model | Size | Accuracy | Speed |
 |-------|------|----------|-------|
@@ -189,52 +180,35 @@ samantha-install download-model medium  # Better accuracy (1.5GB)
 | medium | 1.5GB | Better | Slower |
 | large | 3GB | Best | Slowest |
 
-## 🖥️ Platform Support
+## 🔧 MCP Tools
 
-| Platform | Clipboard | Keystrokes | Window Detection |
-|----------|-----------|------------|------------------|
-| **macOS** | Built-in | AppleScript | System Events |
-| **Linux (X11)** | `xclip`/`xsel` | `xdotool` | `xdotool`/`wmctrl` |
-| **Linux (Wayland)** | `wl-copy` | `ydotool` | Limited |
-| **Windows** | Built-in | `pyautogui` | `pygetwindow`/PowerShell |
+For developers integrating Samantha:
 
-### Supported Apps
-
-**IDEs** (with Claude Code extension/plugin): Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
-
-**Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, gnome-terminal, konsole, xfce4-terminal, xterm, Windows Terminal, PowerShell, cmd
-
-### Smart Injection
-
-Samantha tries IDEs first (using Cmd/Ctrl+Escape to focus Claude input), then falls back to terminal. After injection, it restores focus to your previous app (configurable via `restore_focus`).
+| Tool | Description |
+|------|-------------|
+| `samantha_start` | Start voice mode |
+| `samantha_stop` | Stop voice mode |
+| `samantha_speak` | Speak text via TTS |
+| `samantha_status` | Check voice mode status |
 
 ## 🔬 Technical Details
 
-- **VAD**: WebRTC VAD with aggressiveness level 1 for responsive speech detection
-- **Audio filtering**: Energy threshold (default 3000) filters noise before Whisper to prevent hallucinations
-- **STT**: Whisper (local, port 2022) with sanitization for artifacts like `[BLANK_AUDIO]`, `[Music]`
-- **TTS**: Kokoro via sounddevice (uses system default output)
-- **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
-- **Silence detection**: 1s threshold with 1s initial grace period
-- **Echo prevention**: Audio queue cleared during TTS with text-based filtering
-- **Interrupt**: Works with phrases like "please stop" - dynamic word filtering prevents self-interruption
+- **Speech detection**: WebRTC VAD (Voice Activity Detection)
+- **Speech-to-text**: Whisper running locally on port 2022
+- **Text-to-speech**: Kokoro running locally on port 8880
+- **Audio**: Records at 24kHz, resamples to 16kHz for processing
+- **Silence detection**: 1 second threshold triggers message send
+- **Echo prevention**: Filters out TTS playback from mic input
 
 ### How Injection Works
 
-When you speak to Samantha, your voice is transcribed and "injected" into the target app (Cursor, Terminal, etc.) as if you typed it:
+When you speak to Samantha, your voice is transcribed and "injected" into Claude Code as if you typed it:
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   🎙️ Mic    │────▶│  Whisper    │────▶│  Clipboard  │────▶│  Activate   │────▶│   Paste +   │────▶│  Restore    │
-│   Record    │     │  Transcribe │     │    Copy     │     │  Target App │     │    Enter    │     │    Focus    │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-     Audio              Text              pbcopy/            Bring window          Cmd+V +          Return to
-                                          xclip              to focus              Return           previous app
+🎙️ Mic → Whisper → Clipboard → Activate App → Paste + Enter → Restore Focus
 ```
 
-**IDE-specific**: When injecting into an IDE (Cursor, VS Code, JetBrains), Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
-
-This clipboard-based approach works reliably across all supported apps without requiring app-specific APIs.
+For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the Claude input field before pasting.
 
 ## 📄 License
 
