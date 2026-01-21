@@ -315,7 +315,7 @@ def is_claude_process_running() -> bool:
 
 
 def is_claude_running_in_terminal() -> bool:
-    """Check if Claude is running in a real terminal (not Cursor/IDE).
+    """Check if Claude is running in a real terminal (not Cursor/IDE extension).
 
     Returns True if Claude has a real TTY (like ttys001), False if running in IDE (shows ??).
     """
@@ -337,6 +337,66 @@ def is_claude_running_in_terminal() -> bool:
         return False
     except Exception as e:
         logger.debug("Terminal Claude check failed: %s", e)
+        return False
+
+
+def is_claude_running_in_ide_terminal(ide_name: str) -> bool:
+    """Check if Claude CLI is running specifically in the given IDE's integrated terminal.
+
+    Traces the parent process tree of Claude CLI processes to see if they belong
+    to the specified IDE (e.g., Cursor, Code, VS Code).
+
+    Returns True if Claude is running in that IDE's terminal, False otherwise.
+    """
+    try:
+        if PLATFORM == "Darwin":
+            result = subprocess.run(
+                ["bash", "-c", "ps aux | grep '[c]laude' | grep -v 'stream-json' | awk '{if($7 != \"??\") print $2}'"],
+                capture_output=True, text=True, timeout=5
+            )
+            pids = result.stdout.strip().split('\n')
+            pids = [p for p in pids if p]
+
+            if not pids:
+                logger.debug("No Claude CLI with TTY found")
+                return False
+
+            ide_lower = ide_name.lower()
+            for pid in pids:
+                current_pid = pid
+                for _ in range(10):
+                    ppid_result = subprocess.run(
+                        ["ps", "-o", "ppid=", "-p", current_pid],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    ppid = ppid_result.stdout.strip()
+                    if not ppid or ppid == "0" or ppid == "1":
+                        break
+
+                    comm_result = subprocess.run(
+                        ["ps", "-o", "comm=", "-p", ppid],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    comm = comm_result.stdout.strip().lower()
+
+                    if ide_lower in comm or f"{ide_lower} helper" in comm:
+                        logger.debug("Found Claude CLI in %s terminal (PID %s, parent %s: %s)", ide_name, pid, ppid, comm)
+                        return True
+
+                    current_pid = ppid
+
+            logger.debug("Claude CLI not found in %s terminal", ide_name)
+            return False
+
+        elif PLATFORM == "Linux":
+            return is_claude_running_in_terminal()
+
+        elif PLATFORM == "Windows":
+            return is_claude_running_in_terminal()
+
+        return False
+    except Exception as e:
+        logger.debug("IDE terminal Claude check failed: %s", e)
         return False
 
 

@@ -15,6 +15,7 @@ from samantha.injection.detection import (
     get_running_ide,
     is_claude_process_running,
     is_claude_running_in_terminal,
+    is_claude_running_in_ide_terminal,
     activate_terminal_with_claude,
 )
 
@@ -198,11 +199,64 @@ def focus_ide_terminal(ide_name: str) -> bool:
         return False
 
 
+def _try_inject_extension(ide_name: str, text: str) -> bool:
+    """Try to inject via Claude Code extension (Cmd+Escape)."""
+    if not is_claude_process_running():
+        logger.debug("Claude extension not running")
+        return False
+
+    logger.info("💉 Injecting into %s (extension mode): %s", ide_name, text[:50])
+
+    if not copy_to_clipboard(text):
+        logger.error("Failed to copy to clipboard")
+        return False
+
+    if not focus_ide_claude_input(ide_name):
+        logger.debug("Failed to focus %s Claude input", ide_name)
+        return False
+
+    time.sleep(0.2)
+
+    if simulate_paste_and_enter():
+        logger.info("✅ Injected into %s extension", ide_name)
+        return True
+
+    logger.debug("Paste failed in %s extension", ide_name)
+    return False
+
+
+def _try_inject_cli(ide_name: str, text: str) -> bool:
+    """Try to inject via IDE's integrated terminal (Ctrl+`)."""
+    if not is_claude_running_in_ide_terminal(ide_name):
+        logger.debug("Claude CLI not running in %s terminal", ide_name)
+        return False
+
+    logger.info("💉 Injecting into %s terminal (CLI mode): %s", ide_name, text[:50])
+
+    if not copy_to_clipboard(text):
+        logger.error("Failed to copy to clipboard")
+        return False
+
+    if not focus_ide_terminal(ide_name):
+        logger.debug("Failed to focus %s terminal", ide_name)
+        return False
+
+    time.sleep(0.2)
+
+    if simulate_paste_and_enter():
+        logger.info("✅ Injected into %s terminal", ide_name)
+        return True
+
+    logger.debug("Paste failed in %s terminal", ide_name)
+    return False
+
+
 def inject_into_ide(text: str) -> bool:
     """Inject text into IDE's Claude input field or integrated terminal.
 
     Behavior depends on injection_mode config:
-    - 'extension' (default): Focus Claude Code extension input (Cmd+Escape)
+    - 'auto' (default): Try extension first, then CLI
+    - 'extension': Focus Claude Code extension input (Cmd+Escape)
     - 'cli': Focus integrated terminal (Ctrl+`) for Claude CLI
 
     Returns True if injection succeeded, False otherwise.
@@ -214,37 +268,18 @@ def inject_into_ide(text: str) -> bool:
 
     injection_mode = get_injection_mode()
 
-    if injection_mode == "cli":
-        if not is_claude_running_in_terminal():
-            logger.debug("Claude CLI not running in terminal")
-            return False
-        logger.info("💉 Injecting into %s terminal (CLI mode): %s", ide_name, text[:50])
-        focus_func = focus_ide_terminal
-        target_desc = "terminal"
+    if injection_mode == "auto":
+        if _try_inject_extension(ide_name, text):
+            return True
+        logger.debug("Extension mode failed, trying CLI mode")
+        if _try_inject_cli(ide_name, text):
+            return True
+        logger.debug("Both extension and CLI modes failed for %s", ide_name)
+        return False
+    elif injection_mode == "cli":
+        return _try_inject_cli(ide_name, text)
     else:
-        if not is_claude_process_running():
-            logger.debug("Claude process not running")
-            return False
-        logger.info("💉 Injecting into %s (extension mode): %s", ide_name, text[:50])
-        focus_func = focus_ide_claude_input
-        target_desc = "Claude input"
-
-    if not copy_to_clipboard(text):
-        logger.error("Failed to copy to clipboard")
-        return False
-
-    if not focus_func(ide_name):
-        logger.warning("Failed to focus %s %s", ide_name, target_desc)
-        return False
-
-    time.sleep(0.2)
-
-    if simulate_paste_and_enter():
-        logger.info("✅ Injected into %s", ide_name)
-        return True
-    else:
-        logger.error("Paste failed in %s", ide_name)
-        return False
+        return _try_inject_extension(ide_name, text)
 
 
 def inject_into_terminal(text: str) -> bool:
