@@ -92,7 +92,8 @@ def samantha_loop_thread():
         vad_tts = webrtcvad.Vad(VAD_AGGRESSIVENESS_TTS) if VAD_AVAILABLE else None
 
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=np.int16,
-                           callback=audio_callback, blocksize=chunk_samples, device=get_input_device()):
+                           callback=audio_callback, blocksize=chunk_samples, device=get_input_device()) as stream:
+            state._audio_stream = stream
             logger.debug("Started continuous audio stream")
 
             if state._thread_ready:
@@ -300,5 +301,7 @@ def samantha_loop_thread():
 
     except Exception as e:
         logger.error("Stream error: %s", e)
+    finally:
+        state._audio_stream = None
 
     logger.info("🛑 Samantha thread stopped")

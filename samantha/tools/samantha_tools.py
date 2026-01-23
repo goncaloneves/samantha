@@ -85,14 +85,33 @@ async def samantha_stop() -> str:
     """
     state._thread_stop_flag = True
 
-    if state._samantha_thread and state._samantha_thread.is_alive():
-        state._samantha_thread.join(timeout=2.0)
-        state._samantha_thread = None
-
-    SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
+    # Interrupt any ongoing TTS playback
+    playback._tts_interrupt = True
+    playback._tts_playing = False
 
     with playback._tts_queue_lock:
         playback._tts_text_queue.clear()
+
+    # Try graceful shutdown first
+    if state._samantha_thread and state._samantha_thread.is_alive():
+        state._samantha_thread.join(timeout=2.0)
+
+        # If still alive, force close the audio stream
+        if state._samantha_thread.is_alive() and state._audio_stream:
+            try:
+                state._audio_stream.stop()
+                state._audio_stream.close()
+                logger.info("Force closed audio stream")
+            except Exception as e:
+                logger.debug("Error closing audio stream: %s", e)
+            state._samantha_thread.join(timeout=1.0)
+
+        # Clear thread reference only if it's actually stopped
+        if not state._samantha_thread.is_alive():
+            state._samantha_thread = None
+
+    state._audio_stream = None
+    SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
     kill_orphaned_processes()
 
