@@ -71,7 +71,7 @@ Create `~/.samantha/config.json` for easy customization:
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
   "theodore": true,
   "restore_focus": true,
-  "min_audio_energy": 3000,
+  "min_audio_energy": 1500,
   "target_app": null,
   "injection_mode": "auto",
   "ai_process_pattern": "claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex",
@@ -90,7 +90,7 @@ Config file values take precedence over environment variables.
 | `SAMANTHA_DEACTIVATION_WORDS` | Deactivation phrases | `samantha sleep,goodbye samantha,...` |
 | `SAMANTHA_THEODORE` | Call user "Theodore" like in the movie | `true` |
 | `SAMANTHA_RESTORE_FOCUS` | Return to previous app after injection | `true` |
-| `SAMANTHA_MIN_AUDIO_ENERGY` | Audio threshold for noise filtering | `3000` |
+| `SAMANTHA_MIN_AUDIO_ENERGY` | Audio threshold for noise filtering | `1500` |
 | `SAMANTHA_TARGET_APP` | Target app for injection | Auto-detect |
 | `SAMANTHA_INJECTION_MODE` | `auto`, `extension`, `cli`, or `terminal` | `auto` |
 | `SAMANTHA_AI_PROCESS_PATTERN` | Regex to detect AI CLIs | `claude\|gemini\|copilot\|...` |
@@ -102,7 +102,7 @@ Config file values take precedence over environment variables.
 
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
 - **VAD**: WebRTC VAD for responsive speech detection
-- **Audio filtering**: Energy threshold (3000) filters background noise before Whisper
+- **Audio filtering**: Energy threshold (1500) filters background noise before Whisper
 - **STT**: Whisper (localhost:2022)
 - **TTS**: Kokoro (localhost:8880) via sounddevice, with system player fallback
 - **TTS fallback**: If sounddevice/PortAudio fails (e.g., headphones unplugged), falls back to afplay (macOS), paplay/pw-play/aplay (Linux), or winsound (Windows)

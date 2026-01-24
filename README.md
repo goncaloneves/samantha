@@ -166,7 +166,7 @@ Create `~/.samantha/config.json` to customize:
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
   "theodore": true,
   "restore_focus": true,
-  "min_audio_energy": 3000
+  "min_audio_energy": 1500
 }
 ```
 
@@ -179,7 +179,7 @@ Create `~/.samantha/config.json` to customize:
 | `deactivation_words` | Phrases that put Samantha to sleep | `samantha sleep`, `goodbye samantha` |
 | `theodore` | Call you "Theodore" like in the movie | `true` |
 | `restore_focus` | Return to your previous app after injection | `true` |
-| `min_audio_energy` | Audio threshold to filter background noise | `3000` |
+| `min_audio_energy` | Audio threshold to filter background noise | `1500` |
 | `input_device` | Microphone device index | System default |
 | `output_device` | Speaker device index | System default |
 
@@ -205,9 +205,9 @@ Samantha works great with your laptop's built-in microphone - no headphones or e
 
 | Value | Use Case |
 |-------|----------|
-| `1500` | Headset mic in quiet environment |
-| `3000` | Laptop mic, filters typing noise (default) |
-| `5000` | Noisy environment, requires clearer speech |
+| `1500` | Balanced, catches normal speech (default) |
+| `3000` | Conservative, filters typing noise |
+| `5000` | Very conservative, noisy environments |
 
 ## 🤖 Multi-AI Support
 

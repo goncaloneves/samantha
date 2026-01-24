@@ -81,20 +81,20 @@ def get_min_audio_energy() -> int:
     Whisper can hallucinate phrases like "Thank you for watching" on silence/noise.
 
     Recommended values (16-bit PCM, max 32768):
-    - 1500: Very sensitive, may pick up typing/background noise
-    - 3000: Balanced, filters typing but catches quiet speech (default)
-    - 5000: Conservative, requires clearer speech
+    - 1500: Balanced, catches normal speech while filtering silence (default)
+    - 3000: Conservative, filters typing but may miss quiet speech
+    - 5000: Very conservative, requires clearer/louder speech
 
     Lower values needed for: headphones with mic, quiet environments
     Higher values needed for: laptop mic, noisy environments, keyboard nearby
     """
-    val = get_config("min_audio_energy", 3000)
+    val = get_config("min_audio_energy", 1500)
     if isinstance(val, int):
         return val
     try:
         return int(val)
     except (ValueError, TypeError):
-        return 3000
+        return 1500
 
 
 def get_wake_words() -> list:
