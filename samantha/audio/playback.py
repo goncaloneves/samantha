@@ -1,9 +1,11 @@
 """Audio playback utilities for Samantha."""
 
 import logging
+import os
 import platform
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -25,9 +27,10 @@ _tts_interrupt = False
 
 
 def speak_tts_sync(text: str) -> bool:
-    """Speak text using Kokoro TTS with PCM streaming directly to sounddevice.
+    """Speak text using Kokoro TTS. Falls back to system player if sounddevice fails.
 
-    Can be interrupted by setting _tts_interrupt = True.
+    Falls back to: afplay (macOS), paplay/pw-play/aplay (Linux), winsound (Windows).
+    Can be interrupted by setting _tts_interrupt = True (sounddevice only).
     """
     global _last_tts_text, _last_tts_time, _tts_interrupt
     logger.info("🔊 TTS: %s", text[:80] + "..." if len(text) > 80 else text)
@@ -35,6 +38,22 @@ def speak_tts_sync(text: str) -> bool:
     _last_tts_text = text
     _last_tts_time = time.time()
     _tts_interrupt = False
+
+    # Try sounddevice first (streaming, interruptible)
+    try:
+        return _speak_with_sounddevice(text)
+    except Exception as e:
+        error_str = str(e)
+        if "PortAudio" in error_str or "sounddevice" in error_str.lower():
+            logger.warning("⚠️ sounddevice failed, falling back to system player: %s", e)
+            return _speak_with_system_player(text)
+        logger.error("TTS error: %s", e)
+        return False
+
+
+def _speak_with_sounddevice(text: str) -> bool:
+    """Speak using sounddevice with PCM streaming (interruptible)."""
+    global _tts_interrupt
 
     stream = None
     interrupted = False
@@ -81,9 +100,6 @@ def speak_tts_sync(text: str) -> bool:
             stream.stop()
             log_conversation("TTS", text)
         return True
-    except Exception as e:
-        logger.error("TTS error: %s", e)
-        return False
     finally:
         if stream:
             try:
@@ -91,6 +107,67 @@ def speak_tts_sync(text: str) -> bool:
             except Exception:
                 pass
         _tts_interrupt = False
+
+
+def _speak_with_system_player(text: str) -> bool:
+    """Fallback TTS using system audio player when sounddevice fails.
+
+    Supports macOS (afplay), Linux (paplay/pw-play/aplay), and Windows (winsound).
+    """
+    import requests
+
+    try:
+        # Request WAV format for system player compatibility
+        response = requests.post(
+            KOKORO_URL,
+            json={
+                "model": "kokoro",
+                "input": text,
+                "voice": get_voice(),
+                "response_format": "wav",
+            },
+            timeout=60.0
+        )
+        if response.status_code != 200:
+            logger.error("TTS fallback error: HTTP %s", response.status_code)
+            return False
+
+        # Write to temp file
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(response.content)
+            temp_path = f.name
+
+        try:
+            system = platform.system()
+
+            if system == "Darwin":
+                subprocess.run(["afplay", temp_path], check=True)
+            elif system == "Linux":
+                # Try available Linux audio players
+                for player in ["paplay", "pw-play", "aplay", "ffplay"]:
+                    if shutil.which(player):
+                        cmd = [player, temp_path]
+                        if player == "ffplay":
+                            cmd = ["ffplay", "-nodisp", "-autoexit", temp_path]
+                        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        break
+                else:
+                    logger.error("TTS fallback error: no audio player found on Linux")
+                    return False
+            elif system == "Windows":
+                import winsound
+                winsound.PlaySound(temp_path, winsound.SND_FILENAME)
+            else:
+                logger.error("TTS fallback error: unsupported platform %s", system)
+                return False
+
+            log_conversation("TTS", text)
+            return True
+        finally:
+            os.unlink(temp_path)
+    except Exception as e:
+        logger.error("TTS fallback error: %s", e)
+        return False
 
 
 async def speak_tts(text: str) -> bool:

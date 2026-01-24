@@ -104,7 +104,8 @@ Config file values take precedence over environment variables.
 - **VAD**: WebRTC VAD for responsive speech detection
 - **Audio filtering**: Energy threshold (3000) filters background noise before Whisper
 - **STT**: Whisper (localhost:2022)
-- **TTS**: Kokoro (localhost:8880) via sounddevice
+- **TTS**: Kokoro (localhost:8880) via sounddevice, with system player fallback
+- **TTS fallback**: If sounddevice/PortAudio fails (e.g., headphones unplugged), falls back to afplay (macOS), paplay/pw-play/aplay (Linux), or winsound (Windows)
 - **Injection**: Clipboard paste into IDE or terminal
 - **Interrupt**: Dynamic word selection prevents TTS self-interruption
 - **Session timeout**: 30 minutes of silence returns to idle
