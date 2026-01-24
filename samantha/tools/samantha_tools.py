@@ -49,7 +49,9 @@ async def samantha_start() -> str:
         SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
     SAMANTHA_DIR.mkdir(parents=True, exist_ok=True)
-    SAMANTHA_ACTIVE_FILE.touch()
+    # Write our PID to the active file so other instances can check if we're alive
+    import os
+    SAMANTHA_ACTIVE_FILE.write_text(str(os.getpid()))
 
     kokoro_ok = await ensure_kokoro_running()
     whisper_ok = await ensure_whisper_running()

@@ -136,15 +136,33 @@ def activate_app(app_name: str) -> bool:
 
 
 def is_samantha_running_elsewhere() -> bool:
-    """Check if another Samantha process is running (not in this process)."""
+    """Check if another Samantha voice loop is actually running.
+
+    Uses the active file with PID to verify the process is still alive.
+    Returns False if the active file doesn't exist or the process is dead.
+    """
+    from samantha.config import SAMANTHA_ACTIVE_FILE
+
+    if not SAMANTHA_ACTIVE_FILE.exists():
+        return False
+
     try:
+        content = SAMANTHA_ACTIVE_FILE.read_text().strip()
+        if not content:
+            return False
+
+        pid = int(content)
         our_pid = os.getpid()
-        result = subprocess.run(["pgrep", "-f", "samantha"], capture_output=True, text=True, timeout=5)
-        if result.stdout.strip():
-            for pid in result.stdout.strip().split('\n'):
-                pid = int(pid.strip())
-                if pid != our_pid:
-                    return True
+
+        if pid == our_pid:
+            return False
+
+        # Check if the process is still alive
+        os.kill(pid, 0)  # Doesn't kill, just checks if exists
+        return True
+    except (ValueError, ProcessLookupError, PermissionError):
+        # Invalid PID, process dead, or no permission - clean up stale file
+        SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
         return False
     except Exception:
         return False
