@@ -3,6 +3,7 @@
 import logging
 import os
 import platform
+import signal
 import shutil
 import subprocess
 import time
@@ -169,21 +170,44 @@ def is_samantha_running_elsewhere() -> bool:
 
 
 def kill_orphaned_processes():
-    """Kill any orphaned samantha processes from previous sessions."""
+    """Kill all samantha-related processes (MCP servers and services)."""
     try:
         our_pid = os.getpid()
-        result = subprocess.run(["pgrep", "-f", "samantha"], capture_output=True, text=True, timeout=5)
-        if result.stdout.strip():
-            for pid in result.stdout.strip().split('\n'):
-                pid = int(pid.strip())
-                if pid != our_pid:
+        # Use ps to get full command lines for proper filtering
+        result = subprocess.run(
+            ["ps", "aux"], capture_output=True, text=True, timeout=5
+        )
+
+        for line in result.stdout.strip().split('\n'):
+            # Match samantha entry points and services
+            is_samantha_process = (
+                '/bin/samantha' in line or
+                'samantha/__main__' in line or
+                'uv run samantha' in line or
+                '/.samantha/services/whisper' in line or
+                '/.samantha/services/kokoro' in line
+            )
+
+            if is_samantha_process:
+                parts = line.split()
+                if len(parts) >= 2:
                     try:
-                        os.kill(pid, 9)
-                        logger.info("Killed orphaned samantha process: %d", pid)
-                    except (ProcessLookupError, PermissionError):
-                        pass
+                        pid = int(parts[1])
+                        if pid != our_pid:
+                            os.kill(pid, signal.SIGTERM)  # Graceful first
+                            logger.info("Sent SIGTERM to samantha process: %d", pid)
+                            # Give it a moment to clean up
+                            time.sleep(0.1)
+                            try:
+                                os.kill(pid, 0)  # Check if still alive
+                                os.kill(pid, signal.SIGKILL)  # Force kill
+                                logger.info("Sent SIGKILL to samantha process: %d", pid)
+                            except ProcessLookupError:
+                                pass  # Already dead, good
+                    except (ValueError, ProcessLookupError, PermissionError) as e:
+                        logger.debug("Could not kill PID from line '%s': %s", line[:80], e)
     except Exception as e:
-        logger.debug("Cleanup check failed: %s", e)
+        logger.warning("Orphan cleanup failed: %s", e)
 
 
 def _is_app_running_with_windows(app_name: str) -> bool:

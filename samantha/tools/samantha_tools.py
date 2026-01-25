@@ -2,7 +2,10 @@
 
 import json
 import logging
+import os
+import signal
 import threading
+import time
 
 from samantha.server import mcp
 from samantha.config import (
@@ -50,7 +53,6 @@ async def samantha_start() -> str:
 
     SAMANTHA_DIR.mkdir(parents=True, exist_ok=True)
     # Write our PID to the active file so other instances can check if we're alive
-    import os
     SAMANTHA_ACTIVE_FILE.write_text(str(os.getpid()))
 
     kokoro_ok = await ensure_kokoro_running()
@@ -85,6 +87,28 @@ async def samantha_stop() -> str:
     Returns:
         Status message
     """
+    # First, try to kill the process recorded in the PID file (handles other samantha instances)
+    if SAMANTHA_ACTIVE_FILE.exists():
+        try:
+            pid_content = SAMANTHA_ACTIVE_FILE.read_text().strip()
+            if pid_content:
+                recorded_pid = int(pid_content)
+                if recorded_pid != os.getpid():
+                    try:
+                        os.kill(recorded_pid, signal.SIGTERM)
+                        logger.info("Sent SIGTERM to recorded PID: %d", recorded_pid)
+                        time.sleep(0.2)
+                        try:
+                            os.kill(recorded_pid, 0)  # Check if still alive
+                            os.kill(recorded_pid, signal.SIGKILL)
+                            logger.info("Sent SIGKILL to recorded PID: %d", recorded_pid)
+                        except ProcessLookupError:
+                            pass  # Already dead, good
+                    except (ProcessLookupError, PermissionError):
+                        pass
+        except (ValueError, Exception) as e:
+            logger.debug("Could not kill recorded PID: %s", e)
+
     state._thread_stop_flag = True
 
     # Interrupt any ongoing TTS playback
@@ -115,6 +139,7 @@ async def samantha_stop() -> str:
     state._audio_stream = None
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
+    # Clean up any remaining orphan processes
     kill_orphaned_processes()
 
     return "🛑 Samantha stopped"
