@@ -3,6 +3,7 @@
 import logging
 import os
 import platform
+import re
 import signal
 import shutil
 import subprocess
@@ -247,6 +248,20 @@ def _is_app_running_with_windows(app_name: str) -> bool:
     return False
 
 
+def _get_running_processes_macos() -> list[str]:
+    """Get list of running process names on macOS using ps (no accessibility needed)."""
+    try:
+        result = subprocess.run(
+            ["ps", "-eo", "comm="],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return [p.strip().split("/")[-1] for p in result.stdout.strip().split("\n") if p.strip()]
+    except Exception as e:
+        logger.debug("Failed to get process list: %s", e)
+    return []
+
+
 def get_running_ide() -> str | None:
     """Find which supported IDE is running with windows open (cross-platform).
 
@@ -282,6 +297,15 @@ def get_running_ide() -> str | None:
                             return ide
                 except (ValueError, subprocess.TimeoutExpired):
                     continue
+            # Fallback: use ps if osascript failed (e.g., no accessibility permissions)
+            running_procs = _get_running_processes_macos()
+            if running_procs:
+                running_lower = [p.lower() for p in running_procs]
+                for ide in ide_names:
+                    ide_lower = ide.lower()
+                    if ide_lower in running_lower or ide in running_procs:
+                        logger.debug("Found IDE via ps fallback: %s", ide)
+                        return ide
             return None
         elif PLATFORM == "Linux":
             if shutil.which("xdotool"):
@@ -401,42 +425,57 @@ def is_ai_running_in_ide_terminal(ide_name: str) -> bool:
     """Check if any AI CLI is running specifically in the given IDE's integrated terminal.
 
     Traces the parent process tree of AI CLI processes to see if they belong
-    to the specified IDE (e.g., Cursor, Code, VS Code).
+    to the specified IDE (e.g., Cursor, Code, VS Code, Zed).
     Uses ai_process_pattern config to match process names.
+
+    Optimized to use a single ps command and build process tree in memory.
 
     Returns True if an AI CLI is running in that IDE's terminal, False otherwise.
     """
     pattern = get_ai_process_pattern()
     try:
         if PLATFORM == "Darwin":
+            # Get all process info in a single command (optimized from multiple calls)
             result = subprocess.run(
-                ["bash", "-c", f"ps aux | grep -E '{pattern}' | grep -v grep | awk '{{if($7 != \"??\") print $2}}'"],
+                ["ps", "-eo", "pid=,ppid=,tty=,comm="],
                 capture_output=True, text=True, timeout=5
             )
-            pids = result.stdout.strip().split('\n')
-            pids = [p for p in pids if p]
+            if result.returncode != 0:
+                return False
 
-            if not pids:
+            # Build process tree in memory
+            processes = {}  # pid -> (ppid, comm)
+            ai_pids = []
+            pattern_lower = pattern.lower()
+
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split()
+                if len(parts) >= 4:
+                    pid = parts[0]
+                    ppid = parts[1]
+                    tty = parts[2]
+                    comm = ' '.join(parts[3:])  # comm may have spaces
+                    comm_lower = comm.lower()
+                    processes[pid] = (ppid, comm_lower)
+
+                    # Check if this is an AI process with a real TTY
+                    if tty != "??" and re.search(pattern_lower, comm_lower):
+                        ai_pids.append(pid)
+
+            if not ai_pids:
                 logger.debug("No AI CLI with TTY found")
                 return False
 
+            # Traverse process tree in Python (no subprocess calls)
             ide_lower = ide_name.lower()
-            for pid in pids:
+            for pid in ai_pids:
                 current_pid = pid
                 for _ in range(10):
-                    ppid_result = subprocess.run(
-                        ["ps", "-o", "ppid=", "-p", current_pid],
-                        capture_output=True, text=True, timeout=2
-                    )
-                    ppid = ppid_result.stdout.strip()
+                    if current_pid not in processes:
+                        break
+                    ppid, comm = processes[current_pid]
                     if not ppid or ppid == "0" or ppid == "1":
                         break
-
-                    comm_result = subprocess.run(
-                        ["ps", "-o", "comm=", "-p", ppid],
-                        capture_output=True, text=True, timeout=2
-                    )
-                    comm = comm_result.stdout.strip().lower()
 
                     if ide_lower in comm or f"{ide_lower} helper" in comm:
                         logger.debug("Found AI CLI in %s terminal (PID %s, parent %s: %s)", ide_name, pid, ppid, comm)

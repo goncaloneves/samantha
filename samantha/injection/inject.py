@@ -6,17 +6,17 @@ import shutil
 import subprocess
 import time
 
-from samantha.config import get_restore_focus, get_injection_mode
 import samantha.audio.playback as playback
+from samantha.config import get_injection_mode, get_restore_focus
 from samantha.injection.clipboard import copy_to_clipboard
 from samantha.injection.detection import (
-    get_frontmost_app,
     activate_app,
+    activate_terminal_with_ai,
+    get_frontmost_app,
     get_running_ide,
     is_ai_process_running,
-    is_ai_running_in_terminal,
     is_ai_running_in_ide_terminal,
-    activate_terminal_with_ai,
+    is_ai_running_in_terminal,
 )
 
 logger = logging.getLogger("samantha")
@@ -28,14 +28,16 @@ def simulate_paste_and_enter() -> bool:
     """Simulate Cmd/Ctrl+V paste and Enter keystroke (cross-platform)."""
     try:
         if PLATFORM == "Darwin":
-            applescript = '''
+            applescript = """
             tell application "System Events"
                 keystroke "v" using command down
                 delay 0.2
                 key code 36
             end tell
-            '''
-            subprocess.run(["osascript", "-e", applescript], check=True, capture_output=True)
+            """
+            subprocess.run(
+                ["osascript", "-e", applescript], check=True, capture_output=True
+            )
             return True
         elif PLATFORM == "Linux":
             if shutil.which("xdotool"):
@@ -44,7 +46,9 @@ def simulate_paste_and_enter() -> bool:
                 subprocess.run(["xdotool", "key", "Return"], check=True)
                 return True
             elif shutil.which("ydotool"):
-                subprocess.run(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], check=True)
+                subprocess.run(
+                    ["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], check=True
+                )
                 time.sleep(0.2)
                 subprocess.run(["ydotool", "key", "28:1", "28:0"], check=True)
                 return True
@@ -54,18 +58,21 @@ def simulate_paste_and_enter() -> bool:
         elif PLATFORM == "Windows":
             try:
                 import pyautogui
-                pyautogui.hotkey('ctrl', 'v')
+
+                pyautogui.hotkey("ctrl", "v")
                 time.sleep(0.2)
-                pyautogui.press('enter')
+                pyautogui.press("enter")
                 return True
             except ImportError:
-                powershell_script = '''
+                powershell_script = """
                 Add-Type -AssemblyName System.Windows.Forms
                 [System.Windows.Forms.SendKeys]::SendWait("^v")
                 Start-Sleep -Milliseconds 200
                 [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-                '''
-                subprocess.run(["powershell", "-Command", powershell_script], check=True)
+                """
+                subprocess.run(
+                    ["powershell", "-Command", powershell_script], check=True
+                )
                 return True
         else:
             logger.error("Unsupported platform: %s", PLATFORM)
@@ -80,32 +87,83 @@ def focus_ide_ai_input(ide_name: str) -> bool:
 
     This shortcut toggles focus between the editor and the AI's prompt box.
     Works with Cursor, VS Code, VSCodium, and other IDEs with AI extensions.
+    Zed uses Cmd+? (Shift+Cmd+/) instead.
     """
     try:
         if PLATFORM == "Darwin":
             activate_app(ide_name)
             time.sleep(0.3)
-            subprocess.run(
-                ["osascript", "-e", 'tell application "System Events" to key code 53 using command down'],
-                check=True, capture_output=True, timeout=5
-            )
+            # Zed uses Cmd+? (Shift+Cmd+/) for assistant::ToggleFocus
+            if ide_name.lower() == "zed":
+                subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "System Events" to keystroke "/" using {command down, shift down}',
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=5,
+                )
+            else:
+                subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "System Events" to key code 53 using command down',
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=5,
+                )
             time.sleep(0.2)
             return True
         elif PLATFORM == "Linux":
             activate_app(ide_name)
             time.sleep(0.3)
             if shutil.which("xdotool"):
-                subprocess.run(
-                    ["xdotool", "key", "ctrl+Escape"],
-                    check=True, capture_output=True, timeout=5
-                )
+                # Zed uses Ctrl+? (Ctrl+Shift+/) for assistant::ToggleFocus
+                if ide_name.lower() == "zed":
+                    subprocess.run(
+                        ["xdotool", "key", "ctrl+shift+slash"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    subprocess.run(
+                        ["xdotool", "key", "ctrl+Escape"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
                 time.sleep(0.2)
                 return True
             elif shutil.which("ydotool"):
-                subprocess.run(
-                    ["ydotool", "key", "29:1", "1:1", "1:0", "29:0"],
-                    check=True, capture_output=True, timeout=5
-                )
+                # Zed uses Ctrl+? (Ctrl+Shift+/) - key codes: 29=ctrl, 42=shift, 53=slash
+                if ide_name.lower() == "zed":
+                    subprocess.run(
+                        [
+                            "ydotool",
+                            "key",
+                            "29:1",
+                            "42:1",
+                            "53:1",
+                            "53:0",
+                            "42:0",
+                            "29:0",
+                        ],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    subprocess.run(
+                        ["ydotool", "key", "29:1", "1:1", "1:0", "29:0"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
                 time.sleep(0.2)
                 return True
             return False
@@ -114,17 +172,31 @@ def focus_ide_ai_input(ide_name: str) -> bool:
             time.sleep(0.3)
             try:
                 import pyautogui
-                pyautogui.hotkey('ctrl', 'escape')
+
+                # Zed uses Ctrl+? (Ctrl+Shift+/) for assistant::ToggleFocus
+                if ide_name == "Zed":
+                    pyautogui.hotkey("ctrl", "shift", "/")
+                else:
+                    pyautogui.hotkey("ctrl", "escape")
                 time.sleep(0.2)
                 return True
             except ImportError:
                 pass
             try:
-                powershell_script = '''
-                Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.SendKeys]::SendWait("^{ESC}")
-                '''
-                subprocess.run(["powershell", "-Command", powershell_script], check=True, timeout=5)
+                # Zed uses Ctrl+? (Ctrl+Shift+/) for assistant::ToggleFocus
+                if ide_name == "Zed":
+                    powershell_script = """
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.SendKeys]::SendWait("^+/")
+                    """
+                else:
+                    powershell_script = """
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.SendKeys]::SendWait("^{ESC}")
+                    """
+                subprocess.run(
+                    ["powershell", "-Command", powershell_script], check=True, timeout=5
+                )
                 time.sleep(0.2)
                 return True
             except Exception:
@@ -141,33 +213,75 @@ def focus_ide_terminal(ide_name: str) -> bool:
     """Focus IDE's integrated terminal using Ctrl+` (cross-platform).
 
     This shortcut toggles the terminal panel in VS Code, Cursor, and similar IDEs.
+    Zed uses Cmd/Ctrl+J instead.
     Used for CLI mode when Claude is running in the IDE's integrated terminal.
     """
     try:
         if PLATFORM == "Darwin":
             activate_app(ide_name)
             time.sleep(0.3)
-            subprocess.run(
-                ["osascript", "-e", 'tell application "System Events" to keystroke "`" using control down'],
-                check=True, capture_output=True, timeout=5
-            )
+            # Zed uses Cmd+J for workspace::ToggleBottomDock (terminal)
+            if ide_name.lower() == "zed":
+                subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "System Events" to keystroke "j" using command down',
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=5,
+                )
+            else:
+                subprocess.run(
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "System Events" to keystroke "`" using control down',
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=5,
+                )
             time.sleep(0.2)
             return True
         elif PLATFORM == "Linux":
             activate_app(ide_name)
             time.sleep(0.3)
             if shutil.which("xdotool"):
-                subprocess.run(
-                    ["xdotool", "key", "ctrl+grave"],
-                    check=True, capture_output=True, timeout=5
-                )
+                # Zed uses Ctrl+J for workspace::ToggleBottomDock (terminal)
+                if ide_name.lower() == "zed":
+                    subprocess.run(
+                        ["xdotool", "key", "ctrl+j"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    subprocess.run(
+                        ["xdotool", "key", "ctrl+grave"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
                 time.sleep(0.2)
                 return True
             elif shutil.which("ydotool"):
-                subprocess.run(
-                    ["ydotool", "key", "29:1", "41:1", "41:0", "29:0"],
-                    check=True, capture_output=True, timeout=5
-                )
+                # Zed uses Ctrl+J - key codes: 29=ctrl, 36=j
+                if ide_name.lower() == "zed":
+                    subprocess.run(
+                        ["ydotool", "key", "29:1", "36:1", "36:0", "29:0"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
+                else:
+                    subprocess.run(
+                        ["ydotool", "key", "29:1", "41:1", "41:0", "29:0"],
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
                 time.sleep(0.2)
                 return True
             return False
@@ -176,17 +290,31 @@ def focus_ide_terminal(ide_name: str) -> bool:
             time.sleep(0.3)
             try:
                 import pyautogui
-                pyautogui.hotkey('ctrl', '`')
+
+                # Zed uses Ctrl+J for workspace::ToggleBottomDock (terminal)
+                if ide_name == "Zed":
+                    pyautogui.hotkey("ctrl", "j")
+                else:
+                    pyautogui.hotkey("ctrl", "`")
                 time.sleep(0.2)
                 return True
             except ImportError:
                 pass
             try:
-                powershell_script = '''
-                Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.SendKeys]::SendWait("^{`}")
-                '''
-                subprocess.run(["powershell", "-Command", powershell_script], check=True, timeout=5)
+                # Zed uses Ctrl+J for workspace::ToggleBottomDock (terminal)
+                if ide_name == "Zed":
+                    powershell_script = """
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.SendKeys]::SendWait("^j")
+                    """
+                else:
+                    powershell_script = """
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.SendKeys]::SendWait("^{`}")
+                    """
+                subprocess.run(
+                    ["powershell", "-Command", powershell_script], check=True, timeout=5
+                )
                 time.sleep(0.2)
                 return True
             except Exception:
@@ -356,7 +484,9 @@ def inject_into_app(text: str, log_type: str = None):
     if not success:
         try:
             with playback._tts_queue_lock:
-                playback._tts_text_queue.append("I couldn't find an AI assistant running in any IDE or Terminal. Please make sure your AI is open.")
+                playback._tts_text_queue.append(
+                    "I couldn't find an AI assistant. Make sure your IDE is open, or set target_app in ~/.samantha/config.json"
+                )
         except Exception:
             pass
         return

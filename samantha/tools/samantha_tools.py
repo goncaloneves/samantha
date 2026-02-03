@@ -17,7 +17,7 @@ from samantha.config import (
     get_theodore_mode,
 )
 import samantha.audio.playback as playback
-from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere
+from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere, get_running_ide, find_terminal_with_ai
 from samantha.services.health import ensure_kokoro_running, ensure_whisper_running
 from samantha.core.loop import samantha_loop_thread
 import samantha.core.state as state
@@ -77,7 +77,22 @@ async def samantha_start() -> str:
         SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
         return "❌ Samantha failed to start - audio stream not ready after 30 seconds. Please try again."
 
-    return "🎧 Samantha started. Say 'Hey Samantha' to activate, 'Samantha sleep' to deactivate. During TTS: 'skip' for next, 'stop' to interrupt."
+    # Check what IDE/terminal was detected
+    detected = []
+    ide = get_running_ide()
+    if ide:
+        detected.append(f"IDE: {ide}")
+    terminal = find_terminal_with_ai()
+    if terminal:
+        detected.append(f"Terminal: {terminal}")
+    
+    status = "🎧 Samantha started."
+    if detected:
+        status += f" Detected: {', '.join(detected)}."
+    else:
+        status += " ⚠️ No IDE/terminal detected yet - will find it when you speak."
+    status += " Say 'Hey Samantha' to activate."
+    return status
 
 
 @mcp.tool()
