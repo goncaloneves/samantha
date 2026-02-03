@@ -41,6 +41,9 @@ async def samantha_start() -> str:
     Returns:
         Status message
     """
+    # Always clean up orphaned processes first to prevent accumulation
+    kill_orphaned_processes()
+
     already_running = (
         (state._samantha_thread and state._samantha_thread.is_alive())
         or is_samantha_running_elsewhere()
