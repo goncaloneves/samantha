@@ -11,6 +11,8 @@ import time
 
 from samantha.config import (
     IDE_PROCESS_NAMES,
+    DESKTOP_APP_NAMES,
+    SUPPORTED_DESKTOP_APPS,
     get_target_app,
     SUPPORTED_TERMINALS,
     get_ai_process_pattern,
@@ -275,6 +277,9 @@ def get_running_ide() -> str | None:
         if target in SUPPORTED_TERMINALS:
             logger.debug("target_app is terminal '%s', skipping IDE detection", target)
             return None
+        if target in SUPPORTED_DESKTOP_APPS:
+            logger.debug("target_app is desktop app '%s', skipping IDE detection", target)
+            return None
         if _is_app_running_with_windows(target):
             logger.debug("Using configured target_app: %s", target)
             return target
@@ -360,6 +365,35 @@ def get_running_ide() -> str | None:
 def is_ide_available() -> bool:
     """Check if any supported IDE is running with windows open."""
     return get_running_ide() is not None
+
+
+def get_running_desktop_app() -> str | None:
+    """Find which supported desktop AI app is running with windows open.
+
+    Checks target_app config first if it points to a desktop app.
+    Returns the app name if found, None otherwise.
+    """
+    target = get_target_app()
+    if target:
+        if target in SUPPORTED_DESKTOP_APPS:
+            if _is_app_running_with_windows(target):
+                logger.debug("Using configured desktop target_app: %s", target)
+                return target
+            logger.debug("Desktop target_app '%s' not running", target)
+            return None
+
+    app_names = DESKTOP_APP_NAMES.get(PLATFORM, [])
+    for app in app_names:
+        if _is_app_running_with_windows(app):
+            logger.debug("Found desktop app: %s", app)
+            return app
+
+    return None
+
+
+def is_desktop_app_available() -> bool:
+    """Check if any supported desktop AI app is running with windows open."""
+    return get_running_desktop_app() is not None
 
 
 def is_ai_process_running() -> bool:

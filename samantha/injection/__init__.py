@@ -8,6 +8,8 @@ from .detection import (
     kill_orphaned_processes,
     get_running_ide,
     is_ide_available,
+    get_running_desktop_app,
+    is_desktop_app_available,
     is_ai_process_running,
     is_ai_running_in_terminal,
     is_ai_running_in_ide_terminal,
@@ -18,7 +20,9 @@ from .detection import (
 from .inject import (
     simulate_paste_and_enter,
     focus_ide_ai_input,
+    focus_desktop_app_input,
     inject_into_ide,
+    inject_into_desktop,
     inject_into_terminal,
     inject_into_app,
 )
@@ -32,6 +36,8 @@ __all__ = [
     "kill_orphaned_processes",
     "get_running_ide",
     "is_ide_available",
+    "get_running_desktop_app",
+    "is_desktop_app_available",
     "is_ai_process_running",
     "is_ai_running_in_terminal",
     "is_ai_running_in_ide_terminal",
@@ -40,7 +46,9 @@ __all__ = [
     # Inject
     "simulate_paste_and_enter",
     "focus_ide_ai_input",
+    "focus_desktop_app_input",
     "inject_into_ide",
+    "inject_into_desktop",
     "inject_into_terminal",
     "inject_into_app",
 ]

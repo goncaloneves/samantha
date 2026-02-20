@@ -174,4 +174,11 @@ SUPPORTED_TERMINALS = [
     "xfce4-terminal",
     "xterm",
 ]
-SUPPORTED_APPS = SUPPORTED_IDES + SUPPORTED_TERMINALS
+DESKTOP_APP_NAMES = {
+    "Darwin": ["Claude"],
+    "Linux": ["claude"],
+    "Windows": ["Claude"],
+}
+SUPPORTED_DESKTOP_APPS = ["Claude"]
+
+SUPPORTED_APPS = SUPPORTED_IDES + SUPPORTED_TERMINALS + SUPPORTED_DESKTOP_APPS

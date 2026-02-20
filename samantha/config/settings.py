@@ -119,7 +119,7 @@ def get_target_app() -> str | None:
     """Get user's preferred target app for injection.
 
     If set, Samantha will inject into this app instead of auto-detecting.
-    Must be one of: Cursor, Code, Windsurf, Terminal, iTerm2, etc.
+    Must be one of: Cursor, Code, Windsurf, Claude, Terminal, iTerm2, etc.
 
     Returns None if not set (auto-detect mode).
     """
@@ -130,17 +130,18 @@ def get_target_app() -> str | None:
 
 
 def get_injection_mode() -> str:
-    """Get injection mode: 'auto', 'extension', 'cli', or 'terminal'.
+    """Get injection mode: 'auto', 'extension', 'cli', 'terminal', or 'desktop'.
 
-    - auto (default): Try extension first, then CLI, then standalone terminal
+    - auto (default): Try IDE first, then desktop app, then standalone terminal
     - extension: Use Cmd+Escape to focus Claude Code extension input
     - cli: Focus IDE's integrated terminal (Ctrl+`) for Claude CLI usage
     - terminal: Only use standalone terminal apps (Terminal, iTerm2, Warp, etc.)
+    - desktop: Use Claude Desktop app directly (activate window, paste, enter)
 
     Returns 'auto' by default.
     """
     val = get_config("injection_mode", "auto")
-    if isinstance(val, str) and val.strip().lower() in ("auto", "extension", "cli", "terminal"):
+    if isinstance(val, str) and val.strip().lower() in ("auto", "extension", "cli", "terminal", "desktop"):
         return val.strip().lower()
     return "auto"
 

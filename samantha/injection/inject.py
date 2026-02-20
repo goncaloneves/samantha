@@ -14,6 +14,7 @@ from samantha.injection.detection import (
     activate_terminal_with_ai,
     get_frontmost_app,
     get_running_ide,
+    get_running_desktop_app,
     is_ai_process_running,
     is_ai_running_in_ide_terminal,
     is_ai_running_in_terminal,
@@ -439,13 +440,60 @@ def inject_into_terminal(text: str) -> bool:
         return False
 
 
+def focus_desktop_app_input(app_name: str) -> bool:
+    """Focus a desktop AI app's text input field.
+
+    For Electron apps like Claude Desktop, activating the window is sufficient
+    since the chat input retains focus when the window is activated.
+    """
+    try:
+        activate_app(app_name)
+        time.sleep(0.3)
+        return True
+    except Exception as e:
+        logger.debug("Focus %s input failed: %s", app_name, e)
+        return False
+
+
+def inject_into_desktop(text: str) -> bool:
+    """Inject text into a desktop AI app (e.g., Claude Desktop).
+
+    Activates the app window, pastes text from clipboard, and sends Enter.
+    Returns True if injection succeeded, False otherwise.
+    """
+    app_name = get_running_desktop_app()
+    if not app_name:
+        logger.debug("No desktop AI app available")
+        return False
+
+    logger.info("Injecting into %s (desktop mode): %s", app_name, text[:50])
+
+    if not copy_to_clipboard(text):
+        logger.error("Failed to copy to clipboard")
+        return False
+
+    if not focus_desktop_app_input(app_name):
+        logger.debug("Failed to focus %s input", app_name)
+        return False
+
+    time.sleep(0.2)
+
+    if simulate_paste_and_enter():
+        logger.info("Injected into %s desktop app", app_name)
+        return True
+
+    logger.debug("Paste failed in %s desktop app", app_name)
+    return False
+
+
 def inject_into_app(text: str, log_type: str = None):
-    """Inject text into IDE or terminal (with fallback).
+    """Inject text into IDE, desktop app, or terminal (with fallback).
 
     Behavior depends on injection_mode config:
-    - 'auto' (default): Try IDE first, then fall back to terminal
+    - 'auto' (default): Try IDE first, then desktop app, then terminal
     - 'extension': Only try IDE extension panel
     - 'cli': Only try IDE's integrated terminal
+    - 'desktop': Only try desktop AI apps (Claude Desktop, etc.)
     - 'terminal': Only try standalone terminal apps
 
     Captures frontmost app right before injection and restores focus after.
@@ -456,36 +504,57 @@ def inject_into_app(text: str, log_type: str = None):
     success = False
     target_app = None
 
-    if injection_mode == "terminal":
+    if injection_mode == "desktop":
+        app_name = get_running_desktop_app()
+        if app_name and inject_into_desktop(text):
+            success = True
+            target_app = app_name
+        else:
+            logger.error("Desktop injection failed - no desktop AI app running")
+    elif injection_mode == "terminal":
         logger.debug("Terminal mode: skipping IDE, going directly to terminal")
         if inject_into_terminal(text):
             success = True
             target_app = "Terminal"
         else:
             logger.error("Terminal injection failed - no AI running in terminal")
+    elif injection_mode in ("extension", "cli"):
+        ide_name = get_running_ide()
+        if ide_name and inject_into_ide(text):
+            success = True
+            target_app = ide_name
+        else:
+            logger.error("%s mode injection failed", injection_mode)
     else:
         ide_name = get_running_ide()
         if ide_name and inject_into_ide(text):
             success = True
             target_app = ide_name
-        elif injection_mode in ("extension", "cli"):
-            logger.error("%s mode injection failed", injection_mode)
         else:
             if ide_name:
-                logger.info("%s injection failed, falling back to terminal", ide_name)
+                logger.info("%s injection failed, trying desktop app", ide_name)
             else:
-                logger.debug("No IDE found, trying terminal")
-            if inject_into_terminal(text):
+                logger.debug("No IDE found, trying desktop app")
+            desktop_name = get_running_desktop_app()
+            if desktop_name and inject_into_desktop(text):
                 success = True
-                target_app = "Terminal"
+                target_app = desktop_name
             else:
-                logger.error("All injection methods failed - no AI target found")
+                if desktop_name:
+                    logger.debug("%s desktop injection failed, trying terminal", desktop_name)
+                else:
+                    logger.debug("No desktop app found, trying terminal")
+                if inject_into_terminal(text):
+                    success = True
+                    target_app = "Terminal"
+                else:
+                    logger.error("All injection methods failed - no AI target found")
 
     if not success:
         try:
             with playback._tts_queue_lock:
                 playback._tts_text_queue.append(
-                    "I couldn't find an AI assistant. Make sure your IDE is open, or set target_app in ~/.samantha/config.json"
+                    "I couldn't find an AI assistant running in any IDE, desktop app, or terminal. Please make sure your AI is open."
                 )
         except Exception:
             pass

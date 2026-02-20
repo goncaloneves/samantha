@@ -235,10 +235,11 @@ Samantha works with all major AI CLIs out of the box - no configuration needed:
 
 Samantha can inject your voice commands into:
 
-- **IDEs**: Cursor, VS Code, Windsurf, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
+- **IDEs**: Cursor, VS Code, Windsurf, Zed, IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs
+- **Desktop Apps**: Claude Desktop (macOS/Windows Electron app)
 - **Terminals**: Terminal, iTerm2, Warp, Alacritty, kitty, and more
 
-By default, Samantha auto-detects which app to use (IDEs preferred over terminals).
+By default, Samantha auto-detects which app to use (IDEs first, then desktop apps, then terminals).
 
 ## 🔧 Advanced Configuration
 
@@ -258,7 +259,7 @@ Add these to your config for advanced control:
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `target_app` | Force injection into a specific app (e.g., `Cursor`, `Terminal`) | Auto-detect |
-| `injection_mode` | `auto`, `extension`, `cli`, or `terminal` | `auto` |
+| `injection_mode` | `auto`, `extension`, `cli`, `desktop`, or `terminal` | `auto` |
 | `ai_process_pattern` | Regex pattern to detect AI CLI processes | `claude\|gemini\|copilot\|...` |
 | `ai_window_titles` | Window titles to search for AI terminals | `["claude", "gemini", ...]` |
 
@@ -266,9 +267,10 @@ Add these to your config for advanced control:
 
 | Mode | Description |
 |------|-------------|
-| `auto` | Try extension first, then CLI, then standalone terminal (default) |
+| `auto` | Try IDE first, then desktop app, then standalone terminal (default) |
 | `extension` | Only use AI extension panel (`Cmd+Escape`) |
 | `cli` | Only use IDE's integrated terminal (`Ctrl+``) |
+| `desktop` | Only use desktop AI apps (Claude Desktop) |
 | `terminal` | Only use standalone terminal apps (Terminal, iTerm2, Warp, etc.) |
 
 ### Force a Specific App
@@ -284,12 +286,12 @@ Set `target_app` to always inject into a specific app:
 
 **Valid `target_app` values:**
 
-| IDEs | Terminals |
-|------|-----------|
-| `Cursor`, `Code`, `VSCodium`, `Windsurf` | `Terminal`, `iTerm2`, `Warp` |
-| `IntelliJ IDEA`, `PyCharm`, `WebStorm` | `Alacritty`, `kitty`, `Hyper` |
-| `PhpStorm`, `RubyMine`, `GoLand` | `WezTerm`, `Konsole`, `Tilix` |
-| `Rider`, `CLion`, `DataGrip` | `Windows Terminal`, `PowerShell`, `cmd` |
+| IDEs | Desktop Apps | Terminals |
+|------|-------------|-----------|
+| `Cursor`, `Code`, `VSCodium`, `Windsurf`, `Zed` | `Claude` | `Terminal`, `iTerm2`, `Warp` |
+| `IntelliJ IDEA`, `PyCharm`, `WebStorm` | | `Alacritty`, `kitty`, `Hyper` |
+| `PhpStorm`, `RubyMine`, `GoLand` | | `WezTerm`, `Konsole`, `Tilix` |
+| `Rider`, `CLion`, `DataGrip` | | `Windows Terminal`, `PowerShell`, `cmd` |
 
 ## 🔧 MCP Tools
 
@@ -311,7 +313,7 @@ For developers integrating Samantha:
 - **Silence detection**: 1 second threshold triggers message send
 - **Echo prevention**: Filters out TTS playback from mic input
 
-For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the AI extension input field before pasting.
+For IDEs, Samantha sends `Cmd+Escape` (macOS) or `Ctrl+Escape` (Linux/Windows) to focus the AI extension input field before pasting. For desktop apps like Claude Desktop, Samantha activates the window directly (Electron apps retain chat input focus on activation).
 
 ## 📄 License
 
