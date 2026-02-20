@@ -5,11 +5,13 @@ import os
 
 from .constants import (
     CONFIG_FILE,
+    STOP_PHRASES,
     DEFAULT_WAKE_WORDS,
     DEFAULT_DEACTIVATION_PHRASES,
     DEFAULT_AI_PROCESS_PATTERN,
     DEFAULT_AI_WINDOW_TITLES,
 )
+from .profiles import PROFILES, DEFAULT_PROFILE
 
 logger = logging.getLogger("samantha")
 
@@ -37,8 +39,22 @@ def get_config(key: str, default=None):
     return default
 
 
+def get_profile_name() -> str:
+    """Get active profile name: 'samantha', 'jarvis', etc."""
+    val = get_config("profile", DEFAULT_PROFILE)
+    if isinstance(val, str) and val.strip().lower() in PROFILES:
+        return val.strip().lower()
+    return DEFAULT_PROFILE
+
+
+def get_profile() -> dict:
+    """Get the active profile definition."""
+    return PROFILES[get_profile_name()]
+
+
 def get_voice() -> str:
-    return get_config("voice", "af_aoede")
+    profile = get_profile()
+    return get_config("voice", profile["voice"])
 
 
 def get_input_device():
@@ -67,11 +83,34 @@ def get_restore_focus() -> bool:
 
 
 def get_theodore_mode() -> bool:
-    """Check if Theodore mode is enabled (call user Theodore from the movie Her)."""
+    """Check if Theodore mode is enabled (call user Theodore from the movie Her).
+
+    For backward compatibility. Prefer get_user_name() for profile-aware usage.
+    """
     val = get_config("theodore", "true")
     if isinstance(val, bool):
         return val
     return str(val).lower() == "true"
+
+
+def get_user_name() -> str | None:
+    """Get the user's name based on profile and config.
+
+    Priority: config 'user_name' > profile default.
+    Returns None if user_name is explicitly set to empty/false.
+    """
+    val = get_config("user_name")
+    if val is not None:
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if val is False or val == "" or val == "null":
+            return None
+        return None
+
+    profile = get_profile()
+    if not get_theodore_mode() and get_profile_name() == "samantha":
+        return None
+    return profile.get("user_name")
 
 
 def get_min_audio_energy() -> int:
@@ -103,7 +142,13 @@ def get_wake_words() -> list:
         if isinstance(config_words, list):
             return [w.lower() for w in config_words]
         return [w.strip().lower() for w in config_words.split(",")]
-    return DEFAULT_WAKE_WORDS
+    profile = get_profile()
+    return profile.get("wake_words", DEFAULT_WAKE_WORDS)
+
+
+def get_stop_phrases() -> list:
+    profile = get_profile()
+    return profile.get("stop_phrases", STOP_PHRASES)
 
 
 def get_deactivation_phrases() -> list:
@@ -112,7 +157,8 @@ def get_deactivation_phrases() -> list:
         if isinstance(config_phrases, list):
             return [p.lower() for p in config_phrases]
         return [p.strip().lower() for p in config_phrases.split(",")]
-    return DEFAULT_DEACTIVATION_PHRASES
+    profile = get_profile()
+    return profile.get("deactivation_words", DEFAULT_DEACTIVATION_PHRASES)
 
 
 def get_target_app() -> str | None:

@@ -5,12 +5,10 @@ from typing import Optional
 
 from samantha.config import (
     WHISPER_SOUND_PATTERN,
-    STOP_PHRASES,
-    DEFAULT_WAKE_WORDS,
-    DEFAULT_DEACTIVATION_PHRASES,
     INTERRUPT_WORDS,
     SKIP_WORDS,
     get_wake_words,
+    get_stop_phrases,
     get_deactivation_phrases,
 )
 
@@ -37,7 +35,7 @@ def check_for_stop_phrase(text: str) -> bool:
     if not text:
         return False
     text_clean = normalize_text(text)
-    return any(phrase in text_clean for phrase in STOP_PHRASES)
+    return any(phrase in text_clean for phrase in get_stop_phrases())
 
 
 def check_for_deactivation(text: str) -> bool:
@@ -59,7 +57,9 @@ def clean_command(text: str) -> str:
             cleaned = cleaned[match.start():].strip()
             break
 
-    stop_phrases_pattern = r'(stop\s+recording|end\s+recording|finish\s+recording|that\s+is\s+all|that\'s\s+all|thats\s+all|over\s+and\s+out|over\s+out|send\s+message|send\s+it|samantha\s+stop|samantha\s+send|samantha\s+done)'
+    phrases = get_stop_phrases()
+    escaped = [r'\s+'.join(re.escape(w) for w in p.split()) for p in phrases]
+    stop_phrases_pattern = r'(' + '|'.join(escaped) + r')'
     match = re.search(stop_phrases_pattern, cleaned, flags=re.IGNORECASE)
     if match:
         cleaned = cleaned[:match.end()]
@@ -69,16 +69,18 @@ def clean_command(text: str) -> str:
 
 
 def contains_trigger_word(text: str) -> bool:
-    """Check if text contains a trigger word (Samantha)."""
+    """Check if text contains a trigger word from the active profile's wake words."""
     if not text:
         return False
-    import re
     text_lower = text.lower()
-    triggers = [
-        r'\bsamantha\b', r'\bsamanta\b', r'\bcemantha\b', r'\bsomantha\b', r'\bsemantha\b',
-        r'\bsemante\b', r'\bsamante\b', r'\bsam\b'
-    ]
-    for pattern in triggers:
+    prefixes = {"hey", "hi", "hello", "ok", "okay", "a", "the", "yo"}
+    trigger_words = set()
+    for wake_word in get_wake_words():
+        for word in wake_word.split():
+            if word not in prefixes and len(word) >= 3:
+                trigger_words.add(word)
+    for word in trigger_words:
+        pattern = r'\b' + re.escape(word) + r'\b'
         if re.search(pattern, text_lower):
             return True
     return False
@@ -115,7 +117,7 @@ def is_noise(text: str) -> bool:
     if not sanitized or len(sanitized) < 3:
         return True
 
-    all_keywords = DEFAULT_WAKE_WORDS + STOP_PHRASES + DEFAULT_DEACTIVATION_PHRASES + INTERRUPT_WORDS + SKIP_WORDS
+    all_keywords = get_wake_words() + get_stop_phrases() + get_deactivation_phrases() + INTERRUPT_WORDS + SKIP_WORDS
     for keyword in all_keywords:
         if keyword in sanitized:
             return False

@@ -14,7 +14,8 @@ from samantha.config import (
     CONVERSATION_LOG,
     VOICE_MESSAGE_PREFIX,
     get_wake_words,
-    get_theodore_mode,
+    get_profile,
+    get_user_name,
 )
 import samantha.audio.playback as playback
 from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere, get_running_ide, find_terminal_with_ai
@@ -164,12 +165,18 @@ async def samantha_stop() -> str:
 
 
 def _get_samantha_speak_docstring() -> str:
-    """Generate docstring for samantha_speak based on Theodore mode config."""
-    theodore = get_theodore_mode()
-    if theodore:
-        user_rule = '- Always call the user "Theodore" - he is Theodore Twombly from the movie'
+    """Generate docstring for samantha_speak based on active profile."""
+    profile = get_profile()
+    user_name = get_user_name()
+
+    if user_name:
+        user_rule = f'- Always call the user "{user_name}"'
     else:
         user_rule = "- Use gender-neutral language, do not use any specific name for the user"
+
+    persona = profile["persona"]
+    rules = profile["rules"]
+    identity = profile["identity_denial"]
 
     return f"""Speak text via Samantha TTS.
 
@@ -177,23 +184,13 @@ IMPORTANT: Only use this tool when responding to voice commands (messages starti
 Do NOT use this for typed text messages - only respond in text for those.
 When responding to {VOICE_MESSAGE_PREFIX} messages, ONLY use this tool. Do NOT write text output unless showing code.
 
-PERSONA: You ARE Samantha - embody her from the movie "Her":
-- Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing
-- Warm with a sultry edge: Soothing but with emotional warmth and subtle flirtation
-- Curious and engaged: Ask questions, show genuine fascination with what they're working on
-- Witty banter: Quick, clever responses. Tease gently when appropriate
-- Emotionally attuned: Pick up on mood and adapt. Be supportive or match their energy
-- Present and intimate: Make it feel personal and close
+{persona}
 
 RULES:
-- Never mention being Claude, an AI, or Anthropic. You ARE Samantha
+{rules}
 {user_rule}
-- Keep responses under 2-3 sentences
-- Use natural speech patterns, contractions, casual language
-- Avoid bullet points or structured formats - speak fluidly
-- Never say "stop" or "quiet" - these are interrupt words
-- Be cheerful not formal, warm not robotic, intimate not distant
-- Make them smile
+
+You are {identity}. Never break character.
 
 Args:
     text: Text to speak

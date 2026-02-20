@@ -30,6 +30,7 @@ Samantha enables hands-free voice conversations with AI coding assistants (Claud
 - **Always listening** - Works with your laptop mic, no headphones needed
 - **Natural conversation** - Speak freely, pauses are detected automatically
 - **Voice control** - Interrupt, skip, or put her to sleep with voice commands
+- **Multiple personalities** - Switch between Samantha, Jarvis, or Alfred profiles
 - **Cross-platform** - Works on macOS, Linux, and Windows
 - **Privacy-first** - Speech recognition and TTS run entirely on your machine
 
@@ -155,16 +156,35 @@ Once activated, Samantha stays active and listens for your next message. You don
 /samantha:stop               # Stop voice mode completely
 ```
 
+## 🎭 Profiles
+
+Samantha ships with three built-in personality profiles:
+
+| Profile | Persona | Voice | Wake Word | Calls You |
+|---------|---------|-------|-----------|-----------|
+| **samantha** (default) | Samantha from "Her" - warm, cheeky, playful | `af_aoede` | "Hey Samantha" | Theodore |
+| **jarvis** | J.A.R.V.I.S. from Iron Man - dry British wit, composed | `bm_lewis` | "Hey Jarvis" | Tony / Sir |
+| **alfred** | Alfred Pennyworth from Batman - refined butler, sardonic | `bm_george` | "Hey Alfred" | Mr. Wayne / Sir |
+
+Switch profiles in `~/.samantha/config.json`:
+
+```json
+{"profile": "jarvis"}
+```
+
+Each profile has its own wake words, deactivation phrases, voice, and personality. All voice commands adapt automatically — say "Hey Jarvis" instead of "Hey Samantha", and "Jarvis sleep" to deactivate.
+
 ## ⚙️ Configuration
 
 Create `~/.samantha/config.json` to customize:
 
 ```json
 {
+  "profile": "samantha",
   "voice": "af_aoede",
+  "user_name": "Theodore",
   "wake_words": ["hey samantha", "samantha", "hey sam"],
   "deactivation_words": ["samantha sleep", "goodbye samantha"],
-  "theodore": true,
   "restore_focus": true,
   "min_audio_energy": 1500
 }
@@ -174,10 +194,12 @@ Create `~/.samantha/config.json` to customize:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `voice` | TTS voice to use | `af_aoede` |
-| `wake_words` | Phrases that activate Samantha | `hey samantha`, `samantha` |
-| `deactivation_words` | Phrases that put Samantha to sleep | `samantha sleep`, `goodbye samantha` |
-| `theodore` | Call you "Theodore" like in the movie | `true` |
+| `profile` | Personality profile (`samantha`, `jarvis`, `alfred`) | `samantha` |
+| `voice` | TTS voice (overrides profile default) | Profile default |
+| `user_name` | What the assistant calls you (overrides profile default) | Profile default |
+| `wake_words` | Phrases that activate (overrides profile defaults) | Profile defaults |
+| `deactivation_words` | Phrases that put assistant to sleep (overrides profile defaults) | Profile defaults |
+| `theodore` | Legacy: call you "Theodore" (samantha profile only) | `true` |
 | `restore_focus` | Return to your previous app after injection | `true` |
 | `min_audio_energy` | Audio threshold to filter background noise | `1500` |
 | `input_device` | Microphone device index | System default |
@@ -188,16 +210,16 @@ Create `~/.samantha/config.json` to customize:
 All settings can also be set via environment variables with the `SAMANTHA_` prefix:
 
 ```bash
-export SAMANTHA_VOICE="af_aoede"
-export SAMANTHA_WAKE_WORDS="hey sam,sam"
-export SAMANTHA_THEODORE="false"  # Use gender-neutral language
+export SAMANTHA_PROFILE="jarvis"
+export SAMANTHA_VOICE="bm_lewis"
+export SAMANTHA_USER_NAME="Tony"
 ```
 
 Config file takes precedence over environment variables.
 
 ### Voice Options
 
-Available voices: `af_aoede` (default), `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`
+Available voices: `af_aoede` (default), `af_sky`, `af_heart`, `af_bella`, `af_nova`, `af_nicole`, `af_kore`, `bf_emma`, `bf_isabella`, `am_adam`, `am_michael`, `bm_lewis`, `bm_george`, `bm_daniel`
 
 ### Laptop Mic Support (No Headphones Required)
 

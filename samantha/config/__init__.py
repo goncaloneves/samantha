@@ -29,16 +29,22 @@ from .constants import (
     DEFAULT_AI_WINDOW_TITLES,
 )
 
+from .profiles import PROFILES, DEFAULT_PROFILE
+
 from .settings import (
     load_config,
     get_config,
+    get_profile_name,
+    get_profile,
     get_voice,
     get_input_device,
     get_output_device,
     get_restore_focus,
     get_theodore_mode,
+    get_user_name,
     get_min_audio_energy,
     get_wake_words,
+    get_stop_phrases,
     get_deactivation_phrases,
     get_target_app,
     get_injection_mode,
@@ -74,16 +80,23 @@ __all__ = [
     "SUPPORTED_APPS",
     "DEFAULT_AI_PROCESS_PATTERN",
     "DEFAULT_AI_WINDOW_TITLES",
+    # Profiles
+    "PROFILES",
+    "DEFAULT_PROFILE",
     # Settings
     "load_config",
     "get_config",
+    "get_profile_name",
+    "get_profile",
     "get_voice",
     "get_input_device",
     "get_output_device",
     "get_restore_focus",
     "get_theodore_mode",
+    "get_user_name",
     "get_min_audio_energy",
     "get_wake_words",
+    "get_stop_phrases",
     "get_deactivation_phrases",
     "get_target_app",
     "get_injection_mode",
