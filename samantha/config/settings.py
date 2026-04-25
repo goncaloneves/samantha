@@ -85,7 +85,7 @@ def get_restore_focus() -> bool:
 def get_theodore_mode() -> bool:
     """Check if Theodore mode is enabled (call user Theodore from the movie Her).
 
-    For backward compatibility. Prefer get_user_name() for profile-aware usage.
+    For backward compatibility. Prefer get_user_names() for profile-aware usage.
     """
     val = get_config("theodore", "true")
     if isinstance(val, bool):
@@ -93,24 +93,41 @@ def get_theodore_mode() -> bool:
     return str(val).lower() == "true"
 
 
-def get_user_name() -> str | None:
-    """Get the user's name based on profile and config.
+def get_user_names() -> list[str]:
+    """Get the in-character forms of address for the user.
 
-    Priority: config 'user_name' > profile default.
-    Returns None if user_name is explicitly set to empty/false.
+    Returns a list so the LLM can vary naturally (e.g. samantha:
+    ["Theodore", "you", "love"]). Empty list = address-less /
+    gender-neutral.
+
+    Priority:
+      1. config 'user_names' (list[str])
+      2. config 'user_name' (str, legacy — wrapped as singleton)
+      3. profile 'user_names' (list[str])
+      4. profile 'user_name' (str, legacy — wrapped as singleton)
     """
+    val = get_config("user_names")
+    if isinstance(val, list):
+        return [v.strip() for v in val if isinstance(v, str) and v.strip()]
+
     val = get_config("user_name")
     if val is not None:
         if isinstance(val, str) and val.strip():
-            return val.strip()
-        if val is False or val == "" or val == "null":
-            return None
-        return None
+            return [val.strip()]
+        return []
+
+    if not get_theodore_mode() and get_profile_name() == "samantha":
+        return []
 
     profile = get_profile()
-    if not get_theodore_mode() and get_profile_name() == "samantha":
-        return None
-    return profile.get("user_name")
+    profile_names = profile.get("user_names")
+    if isinstance(profile_names, list):
+        return [v.strip() for v in profile_names if isinstance(v, str) and v.strip()]
+
+    legacy = profile.get("user_name")
+    if isinstance(legacy, str) and legacy.strip():
+        return [legacy.strip()]
+    return []
 
 
 def get_min_audio_energy() -> int:
@@ -226,13 +243,19 @@ def get_voice_message_suffix() -> str:
     enforcement on its own.
     """
     profile = get_profile()
-    user_name = get_user_name()
+    names = get_user_names()
     persona = profile["persona"]
     rules = profile["rules"]
     identity = profile["identity_denial"]
 
-    if user_name:
-        name_rule = f'- Always call the user "{user_name}"'
+    if len(names) > 1:
+        joined = ", ".join(f'"{n}"' for n in names)
+        name_rule = (
+            f"- Address the user using these in-character forms, varying naturally: "
+            f"{joined}"
+        )
+    elif len(names) == 1:
+        name_rule = f'- Always call the user "{names[0]}"'
     else:
         name_rule = "- Use gender-neutral language; do not assume the user's name"
 

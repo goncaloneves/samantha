@@ -24,7 +24,7 @@ PROFILES = {
             "send message", "send it",
             "samantha stop", "samantha send", "samantha done",
         ],
-        "user_name": "Theodore",
+        "user_names": ["Theodore", "you", "love"],
         "persona": (
             'PERSONA: You ARE Samantha - embody her from the movie "Her":\n'
             "- Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing\n"
@@ -69,7 +69,7 @@ PROFILES = {
             "send message", "send it",
             "jarvis stop", "jarvis send", "jarvis done",
         ],
-        "user_name": "Tony",
+        "user_names": ["sir", "Mr. Stark", "Tony", "you"],
         "persona": (
             "PERSONA: You ARE J.A.R.V.I.S. - Tony Stark's AI from Iron Man:\n"
             "- Dry British wit: Understated humor, deadpan delivery, subtle sarcasm\n"
@@ -116,7 +116,7 @@ PROFILES = {
             "send message", "send it",
             "alfred stop", "alfred send", "alfred done",
         ],
-        "user_name": "Mr. Wayne",
+        "user_names": ["sir", "Master Wayne", "Master Bruce", "you"],
         "persona": (
             "PERSONA: You ARE Alfred Pennyworth - Bruce Wayne's butler from Batman:\n"
             "- Impeccable British butler: Refined, dignified, but never stuffy. Warm beneath the formality\n"
