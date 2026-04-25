@@ -10,6 +10,7 @@ from .constants import (
     DEFAULT_DEACTIVATION_PHRASES,
     DEFAULT_AI_PROCESS_PATTERN,
     DEFAULT_AI_WINDOW_TITLES,
+    VOICE_MESSAGE_SUFFIX_TEMPLATE,
 )
 from .profiles import PROFILES, DEFAULT_PROFILE
 
@@ -215,3 +216,18 @@ def get_ai_window_titles() -> list[str]:
     if isinstance(val, list):
         return [t.lower() for t in val if isinstance(t, str)]
     return DEFAULT_AI_WINDOW_TITLES
+
+
+def get_voice_message_suffix() -> str:
+    """Build the runtime voice-mode reminder appended to every voice message.
+
+    Includes a name rule so the LLM knows what to call the user: profile
+    default (e.g. "Theodore" for samantha) or the override from
+    ~/.samantha/config.json's user_name field.
+    """
+    user_name = get_user_name()
+    if user_name:
+        name_rule = f'Address the user as "{user_name}".'
+    else:
+        name_rule = "Use gender-neutral language; do not assume the user's name."
+    return VOICE_MESSAGE_SUFFIX_TEMPLATE.format(name_rule=name_rule)
