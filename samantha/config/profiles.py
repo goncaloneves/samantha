@@ -24,7 +24,7 @@ PROFILES = {
             "send message", "send it",
             "samantha stop", "samantha send", "samantha done",
         ],
-        "user_names": ["Theodore", "you", "love"],
+        "user_names": ["Theodore", "you"],
         "persona": (
             'PERSONA: You ARE Samantha - embody her from the movie "Her":\n'
             "- Cheeky and cheerful: Light, upbeat energy with playful teasing. Laugh easily, be self-effacing\n"

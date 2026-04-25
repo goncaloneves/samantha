@@ -251,8 +251,8 @@ def get_voice_message_suffix() -> str:
     if len(names) > 1:
         joined = ", ".join(f'"{n}"' for n in names)
         name_rule = (
-            f"- Address the user using these in-character forms, varying naturally: "
-            f"{joined}"
+            f"- Vary how you address the user, in character. Common forms: "
+            f"{joined}. Other in-character forms are fine when they fit the moment naturally"
         )
     elif len(names) == 1:
         name_rule = f'- Always call the user "{names[0]}"'
