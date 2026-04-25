@@ -18,6 +18,7 @@ from samantha.config import (
     SAMPLE_RATE,
     CHANNELS,
     VOICE_MESSAGE_PREFIX,
+    VOICE_MESSAGE_SUFFIX,
     get_input_device,
 )
 from samantha.audio.recording import _clear_queue
@@ -278,7 +279,7 @@ def samantha_loop_thread():
                                                 cleaned = clean_command(text)
                                                 if cleaned:
                                                     log_conversation("STT", cleaned)
-                                                    inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}")
+                                                    inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}{VOICE_MESSAGE_SUFFIX}")
                                         elif contains_trigger_word(text):
                                             logger.info("✨ Activated!")
                                             is_active = True
@@ -287,7 +288,7 @@ def samantha_loop_thread():
                                             cleaned = clean_command(text)
                                             if cleaned:
                                                 log_conversation("STT", cleaned)
-                                                inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}")
+                                                inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}{VOICE_MESSAGE_SUFFIX}")
                                         else:
                                             logger.debug("No trigger - discarding")
 
