@@ -75,15 +75,6 @@ INTERRUPT_WORDS = ["stop", "quiet", "enough", "halt"]
 SKIP_WORDS = ["continue", "skip"]
 
 VOICE_MESSAGE_PREFIX = "[🎙️ Voice - samantha_speak]"
-VOICE_MESSAGE_SUFFIX_TEMPLATE = (
-    "\n\n<system-reminder>"
-    "Voice mode is active. Reply via the mcp__samantha__samantha_speak tool — "
-    "the user is listening, not reading, so plain-text replies are silent. "
-    "Speak naturally: no markdown, no code fences, no file paths. "
-    "{name_rule} "
-    "For technical detail, follow the spoken summary with normal text output."
-    "</system-reminder>"
-)
 
 DEFAULT_AI_PROCESS_PATTERN = "claude|gemini|copilot|aider|chatgpt|gpt|sgpt|codex"
 DEFAULT_AI_WINDOW_TITLES = ["claude", "gemini", "copilot", "aider", "chatgpt", "gpt"]

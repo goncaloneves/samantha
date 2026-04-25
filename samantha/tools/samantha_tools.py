@@ -14,8 +14,6 @@ from samantha.config import (
     CONVERSATION_LOG,
     VOICE_MESSAGE_PREFIX,
     get_wake_words,
-    get_profile,
-    get_user_name,
 )
 import samantha.audio.playback as playback
 from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere, get_running_ide, find_terminal_with_ai
@@ -164,42 +162,6 @@ async def samantha_stop() -> str:
     return "🛑 Samantha stopped"
 
 
-def _get_samantha_speak_docstring() -> str:
-    """Generate docstring for samantha_speak based on active profile."""
-    profile = get_profile()
-    user_name = get_user_name()
-
-    if user_name:
-        user_rule = f'- Always call the user "{user_name}"'
-    else:
-        user_rule = "- Use gender-neutral language, do not use any specific name for the user"
-
-    persona = profile["persona"]
-    rules = profile["rules"]
-    identity = profile["identity_denial"]
-
-    return f"""Speak text via Samantha TTS.
-
-IMPORTANT: Only use this tool when responding to voice commands (messages starting with {VOICE_MESSAGE_PREFIX}).
-Do NOT use this for typed text messages - only respond in text for those.
-When responding to {VOICE_MESSAGE_PREFIX} messages, ONLY use this tool. Do NOT write text output unless showing code.
-
-{persona}
-
-RULES:
-{rules}
-{user_rule}
-
-You are {identity}. Never break character.
-
-Args:
-    text: Text to speak
-
-Returns:
-    Status message
-"""
-
-
 @mcp.tool()
 async def samantha_speak(text: str) -> str:
     """Speak text via Samantha TTS."""
@@ -221,7 +183,17 @@ async def samantha_speak(text: str) -> str:
         return f"❌ TTS failed: {e}"
 
 
-samantha_speak.__doc__ = _get_samantha_speak_docstring()
+samantha_speak.__doc__ = (
+    f"Speak text via Samantha TTS.\n\n"
+    f"Use this tool to reply to voice messages (those starting with "
+    f"{VOICE_MESSAGE_PREFIX}). The persona, rules, and identity for the "
+    f"active profile are injected per-message via the <system-reminder> "
+    f"suffix on the user's voice prompt — read that, not this docstring, "
+    f"for character behavior.\n\n"
+    f"Do NOT call this tool for typed (non-voice) messages.\n\n"
+    f"Args:\n    text: Text to speak\n\n"
+    f"Returns:\n    Status message"
+)
 
 
 @mcp.tool()
