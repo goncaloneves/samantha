@@ -16,6 +16,7 @@ from fastmcp import FastMCP
 mcp = FastMCP("samantha")
 
 from . import tools
+from . import prompts
 from . import resources
 
 
