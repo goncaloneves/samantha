@@ -209,12 +209,12 @@ async def samantha_speak(text: str) -> str:
         if state._samantha_thread and state._samantha_thread.is_alive():
             with playback._tts_queue_lock:
                 playback._tts_text_queue.append(text)
-            return f"🔊 Spoke: {text[:50]}..."
+            return f"🔊 Spoke: {text}"
         else:
             logger.info("Samantha not running, speaking directly")
             success = playback.speak_tts_sync(text)
             if success:
-                return f"🔊 Spoke: {text[:50]}..."
+                return f"🔊 Spoke: {text}"
             else:
                 return "❌ TTS failed: Kokoro service may not be running"
     except Exception as e:
