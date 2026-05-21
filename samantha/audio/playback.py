@@ -24,6 +24,7 @@ _last_tts_time = 0
 _tts_playing = False
 _tts_start_time = 0
 _tts_interrupt = False
+_post_tts_pending = False
 
 
 def speak_tts_sync(text: str) -> bool:

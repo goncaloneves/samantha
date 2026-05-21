@@ -132,6 +132,7 @@ def samantha_loop_thread():
                                 playback._last_tts_time = time.time()
                                 playback._tts_start_time = 0
                                 playback._tts_playing = False
+                                playback._post_tts_pending = True
                                 done_event.set()
 
                         tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
@@ -193,14 +194,14 @@ def samantha_loop_thread():
                             pass
                         continue
 
-                    if playback._last_tts_time > 0:
+                    if playback._post_tts_pending:
                         logger.debug("🧹 Post-TTS cleanup: clearing audio queue and buffers")
                         _clear_queue(audio_queue)
                         speech_detected = False
                         audio_chunks = []
                         silence_duration_ms = 0
                         recording_start = 0
-                        playback._last_tts_time = 0
+                        playback._post_tts_pending = False
                         if is_active:
                             last_speech_time = time.time()
                         continue
@@ -285,10 +286,6 @@ def samantha_loop_thread():
                                             is_active = True
                                             last_speech_time = time.time()
                                             playback.play_sound("activate")
-                                            cleaned = clean_command(text)
-                                            if cleaned:
-                                                log_conversation("STT", cleaned)
-                                                inject_into_app(f"{VOICE_MESSAGE_PREFIX} {cleaned}{get_voice_message_suffix()}")
                                         else:
                                             logger.debug("No trigger - discarding")
 
