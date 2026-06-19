@@ -27,6 +27,32 @@ _tts_interrupt = False
 _post_tts_pending = False
 
 
+def refresh_audio_devices() -> None:
+    """Re-enumerate audio devices so playback/recording bind to the CURRENT default.
+
+    PortAudio (under sounddevice) snapshots the device list once, when it first
+    initializes in the process — on every platform (macOS CoreAudio, Windows
+    WASAPI/MME, Linux ALSA/PulseAudio). A device connected after the MCP server
+    started (e.g. Bluetooth headphones plugged in mid-session) is therefore
+    invisible, and ``device=None`` keeps resolving to whatever was default at
+    startup. Tearing PortAudio down and back up rebuilds the list so the next
+    stream follows the user's current default input/output.
+
+    MUST only be called when no PortAudio stream is open in this process (i.e.
+    before the listening loop opens its input stream, or on the standalone speak
+    path when the loop is not running). Calling it while a stream is live would
+    invalidate that stream.
+    """
+    try:
+        sd._terminate()
+    except Exception:
+        pass
+    try:
+        sd._initialize()
+    except Exception as e:
+        logger.warning("Could not refresh audio devices: %s", e)
+
+
 def speak_tts_sync(text: str) -> bool:
     """Speak text using Kokoro TTS. Falls back to system player if sounddevice fails.
 

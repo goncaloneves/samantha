@@ -101,6 +101,7 @@ Config file values take precedence over environment variables.
 ## Technical Details
 
 - **Recording**: 24kHz, resampled to 16kHz for VAD/Whisper
+- **Audio devices**: Follows the system default input/output (pin with `input_device`/`output_device`). PortAudio snapshots the device list once at init on every platform, so `refresh_audio_devices()` (`audio/playback.py`) re-enumerates it before each listening session starts AND before a standalone `samantha_speak` when the loop is not running — so a device connected after the server started (e.g. Bluetooth headphones) is detected on the next start, a stop → start, or the next direct speak. It is never called while a stream is open (that would invalidate the live loop input stream). Without it the process stays bound to whatever was default at launch.
 - **VAD**: WebRTC VAD for responsive speech detection
 - **Audio filtering**: Energy threshold (1500) filters background noise before Whisper
 - **STT**: Whisper (localhost:2022)

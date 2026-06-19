@@ -48,6 +48,8 @@ def samantha_loop_thread():
     """Main Samantha voice assistant loop running in a dedicated thread."""
     global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event, _tts_text_queue
 
+    playback.refresh_audio_devices()
+
     input_dev = get_input_device()
     try:
         device_info = sd.query_devices(input_dev)

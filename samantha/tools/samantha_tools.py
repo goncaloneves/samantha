@@ -174,6 +174,7 @@ async def samantha_speak(text: str) -> str:
             return f"🔊 Spoke: {text}"
         else:
             logger.info("Samantha not running, speaking directly")
+            playback.refresh_audio_devices()
             success = playback.speak_tts_sync(text)
             if success:
                 return f"🔊 Spoke: {text}"

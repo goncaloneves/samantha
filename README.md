@@ -332,6 +332,7 @@ For developers integrating Samantha:
 - **Speech-to-text**: Whisper running locally on port 2022
 - **Text-to-speech**: Kokoro running locally on port 8880
 - **Audio**: Records at 24kHz, resamples to 16kHz for processing
+- **Audio devices**: Follows your system default mic/speaker (or the pinned `input_device`/`output_device` index). The device list is re-enumerated every time listening starts and before a standalone speak, so a mic/speaker connected after the server launched — including Bluetooth headphones — is picked up on the next start, a quick stop → start, or the next spoken reply
 - **Silence detection**: 1 second threshold triggers message send
 - **Echo prevention**: Filters out TTS playback from mic input
 
