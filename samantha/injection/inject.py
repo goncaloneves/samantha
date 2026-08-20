@@ -12,6 +12,7 @@ from samantha.injection.clipboard import copy_to_clipboard, preserved_clipboard
 from samantha.injection.detection import (
     FOCUS_EDITOR,
     FOCUS_INPUT,
+    FOCUS_UNKNOWN,
     focused_input_state,
     activate_app,
     activate_terminal_with_ai,
@@ -54,7 +55,20 @@ def ensure_ai_input_focused(ide_name: str) -> bool:
     if state == FOCUS_INPUT:
         return True
 
-    # Fail closed. Typing here would either vanish or land in the user's file.
+    if state == FOCUS_UNKNOWN:
+        # No instrument. Focus reading is implemented via the macOS Accessibility
+        # API, so on Linux and Windows - and on macOS when the app is not
+        # frontmost or Accessibility permission is missing - there is nothing to
+        # check against. Refusing here would disable injection outright on those
+        # platforms, so fall back to the historical best-effort behaviour: this
+        # path is never worse than before, only unverified.
+        logger.debug(
+            "Cannot verify focus in %s on this platform; proceeding unverified", ide_name
+        )
+        return True
+
+    # Focus was READ and is definitively wrong. Typing here would either vanish
+    # or land in the user's source file, so type nothing and say so.
     logger.error(
         "Refusing to type into %s: focus is %r, not a usable text input. "
         "Click into the AI input and speak again.", ide_name, state,

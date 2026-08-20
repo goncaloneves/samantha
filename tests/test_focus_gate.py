@@ -100,3 +100,35 @@ def test_extension_injection_does_not_paste_when_focus_is_refused(mocker):
 
     assert inject._try_inject_extension("Cursor", "hello") is False
     paste.assert_not_called(), "pasted despite refusing focus - dictation would be lost"
+
+
+@pytest.mark.parametrize("platform", ["Linux", "Windows"])
+def test_platforms_without_a_focus_probe_still_inject(mocker, platform):
+    """Focus reading is macOS-only. Refusing when it is unavailable would
+    disable dictation outright on Linux and Windows."""
+    mocker.patch.object(detection, "PLATFORM", platform)
+    assert detection.focused_input_state("Cursor") == detection.FOCUS_UNKNOWN
+
+    mocker.patch.object(inject, "focused_input_state", return_value=detection.FOCUS_UNKNOWN)
+    mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
+
+    assert inject.ensure_ai_input_focused("Cursor") is True, (
+        f"{platform} can no longer inject at all"
+    )
+
+
+def test_macos_without_accessibility_permission_still_injects(mocker):
+    """A probe that cannot read must degrade to the old behaviour, not block."""
+    mocker.patch.object(inject, "focused_input_state", return_value=detection.FOCUS_UNKNOWN)
+    mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
+    assert inject.ensure_ai_input_focused("Cursor") is True
+
+
+def test_refusal_is_reserved_for_a_focus_we_actually_read(mocker):
+    """Both directions: unknown proceeds, a READ wrong focus refuses."""
+    mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
+    for state, expected in ((detection.FOCUS_UNKNOWN, True),
+                            (detection.FOCUS_EDITOR, False),
+                            (detection.FOCUS_OTHER, False)):
+        mocker.patch.object(inject, "focused_input_state", return_value=state)
+        assert inject.ensure_ai_input_focused("Cursor") is expected, state
