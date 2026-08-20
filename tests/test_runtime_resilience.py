@@ -224,3 +224,15 @@ async def test_start_does_not_block_the_event_loop_while_waiting_for_audio(mocke
         f"event loop ticked only {ticks} times during a 0.6s readiness wait - "
         "the wait is still pinning the loop"
     )
+
+
+def test_a_recording_that_never_falls_silent_is_force_finalised():
+    """The ring-buffer cap only applies before a recording starts, so an
+    utterance with no silence gap - a noisy room, a stuck VAD - would grow the
+    chunk list without bound for as long as it lasted."""
+    now = time.time()
+    assert loop._recording_is_over_length(now - 5, 120.0) is False
+    assert loop._recording_is_over_length(now - 121, 120.0) is True
+    assert loop._recording_is_over_length(0, 120.0) is False, (
+        "a not-yet-started recording must not be treated as over-length"
+    )

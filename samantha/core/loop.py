@@ -45,6 +45,13 @@ import samantha.core.state as state
 logger = logging.getLogger("samantha")
 
 
+def _recording_is_over_length(recording_start: float, limit: float = 120.0) -> bool:
+    """Whether an in-progress recording has run past its hard length cap."""
+    if not recording_start:
+        return False
+    return (time.time() - recording_start) >= limit
+
+
 def _input_stream_is_live(stream) -> bool:
     """Whether the capture stream is still delivering audio."""
     try:
@@ -93,6 +100,7 @@ def samantha_loop_thread():
     VAD_AGGRESSIVENESS_LISTENING = 1
     VAD_AGGRESSIVENESS_TTS = 1
     MAX_INACTIVE_AUDIO_MS = 15000
+    MAX_RECORDING_DURATION = 120.0
 
     chunk_samples = int(SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
     vad_chunk_samples = int(VAD_SAMPLE_RATE * VAD_CHUNK_DURATION_MS / 1000)
@@ -269,6 +277,18 @@ def samantha_loop_thread():
                             is_speech = _chunk_has_speech_energy(chunk_flat)
                     else:
                         is_speech = _chunk_has_speech_energy(chunk_flat)
+
+                    if speech_detected and _recording_is_over_length(recording_start, MAX_RECORDING_DURATION):
+                        # The ring-buffer cap only applies before a recording starts,
+                        # so without this an utterance that never falls silent - a
+                        # noisy room, a stuck VAD - grows audio_chunks without bound.
+                        logger.warning(
+                            "Recording exceeded %.0fs without a silence gap - "
+                            "finalising it so the buffer cannot grow without bound",
+                            MAX_RECORDING_DURATION,
+                        )
+                        silence_duration_ms = SILENCE_THRESHOLD_MS
+                        is_speech = False
 
                     if not speech_detected:
                         if is_speech:
