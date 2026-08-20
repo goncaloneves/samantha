@@ -16,6 +16,7 @@ except ImportError:
 
 from samantha.config import (
     MAX_REATTACH_ATTEMPTS,
+    DEVICE_CHECK_INTERVAL,
     REATTACH_BACKOFF_SECONDS,
     get_min_audio_energy,
     SAMPLE_RATE,
@@ -26,6 +27,7 @@ from samantha.config import (
 )
 from samantha.audio.recording import _clear_queue
 import samantha.audio.playback as playback
+from samantha.audio.devices import current_default_devices
 from samantha.audio.processing import (
     is_echo,
     get_active_interrupt_words,
@@ -129,7 +131,9 @@ def _listen_session() -> str:
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=np.int16,
                            callback=audio_callback, blocksize=chunk_samples, device=get_input_device()) as stream:
             state._audio_stream = stream
-            logger.debug("Started continuous audio stream")
+            session_devices = current_default_devices()
+            last_device_check = time.time()
+            logger.debug("Started continuous audio stream (devices=%s)", session_devices)
 
             if state._thread_ready:
                 state._thread_ready.set()
@@ -244,6 +248,26 @@ def _listen_session() -> str:
                             logger.info("⏰ 30min silence - returning to idle")
                             is_active = False
                             playback.play_sound("timeout")
+
+                    if (
+                        time.time() - last_device_check >= DEVICE_CHECK_INTERVAL
+                        and not speech_detected
+                        and not playback._tts_playing
+                    ):
+                        last_device_check = time.time()
+                        current = current_default_devices()
+                        if current != (None, None) and current != session_devices:
+                            # Checked only while idle: cycling mid-utterance would
+                            # discard what the user is saying, and mid-playback would
+                            # cut her off. PortAudio cannot see this change at all -
+                            # its device list is cached for the life of the stream -
+                            # so the session ends and the wrapper reopens on the new
+                            # default, for input and output alike.
+                            logger.info(
+                                "Default audio device changed %s -> %s; following it",
+                                session_devices, current,
+                            )
+                            return DEVICE_CHANGED
 
                     try:
                         chunk = audio_queue.get(timeout=0.1)
@@ -361,6 +385,7 @@ def _listen_session() -> str:
 
 
 DEVICE_LOST = "device-lost"
+DEVICE_CHANGED = "device-changed"
 STOPPED = "stopped"
 
 
@@ -380,7 +405,13 @@ def samantha_loop_thread():
         if outcome == STOPPED or state._thread_stop_flag:
             break
 
-        failures += 1
+        if outcome == DEVICE_CHANGED:
+            # Following the user to a device that just appeared is normal
+            # operation, not a failure, and must not consume the retry budget
+            # meant for "there is no working input at all".
+            failures = 0
+        else:
+            failures += 1
         if failures > MAX_REATTACH_ATTEMPTS:
             logger.error(
                 "Could not reattach to an input device after %d attempts - stopping. "
@@ -391,6 +422,6 @@ def samantha_loop_thread():
 
         time.sleep(REATTACH_BACKOFF_SECONDS)
         playback.refresh_audio_devices()
-        logger.info("Reattaching to the current default input device (attempt %d)", failures)
+        logger.info("Reopening the audio stream on the current default device")
 
     logger.info("🛑 Samantha thread stopped")
