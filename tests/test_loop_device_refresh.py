@@ -59,7 +59,11 @@ def test_loop_refreshes_devices_before_opening_input_stream(mocker, restore_stat
     state._thread_stop_flag = True
     state._thread_ready = threading.Event()
 
-    loop.samantha_loop_thread()
+    # The listening loop is now a reattach wrapper around a single stream
+    # session, so a device change can be survived. The refresh-before-open
+    # invariant belongs to the session; the wrapper deliberately runs none when
+    # the stop flag is already set.
+    loop._listen_session()
 
     assert "refresh" in calls, "loop did not refresh the device list"
     assert "input_stream_open" in calls

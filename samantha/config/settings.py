@@ -90,6 +90,27 @@ def get_output_device():
     return None
 
 
+def get_ide_focus_command(ide_name: str) -> str:
+    """Command-palette title that focuses the AI input in ``ide_name``, if configured.
+
+    The default focus shortcut is context-dependent. In the VS Code family
+    Cmd+Escape is bound to several commands separated by when-clauses, so it
+    only means "focus the AI input" while the caret is in a code editor; from
+    the conversation transcript or the input itself the same key resolves to
+    blur. Naming the command directly removes that ambiguity, and works from any
+    focus state.
+
+    Left unset this returns "" and the historical shortcut is used, so no
+    existing setup changes behaviour. It is opt-in because the palette runs
+    whatever it matches: if the configured title does not exist in that IDE,
+    fuzzy matching would select some other command and run it.
+    """
+    commands = get_config("ide_focus_commands", {})
+    if not isinstance(commands, dict):
+        return ""
+    return str(commands.get(ide_name, "") or "")
+
+
 def get_restore_focus() -> bool:
     val = get_config("restore_focus", "true")
     if isinstance(val, bool):

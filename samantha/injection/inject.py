@@ -1,5 +1,6 @@
 """Injection utilities for Samantha."""
 
+import json
 import logging
 import platform
 import shutil
@@ -7,10 +8,19 @@ import subprocess
 import time
 
 import samantha.audio.playback as playback
-from samantha.config import INJECTION_TIMEOUT, get_injection_mode, get_restore_focus
+from samantha.config import (
+    COMMAND_PALETTE_SETTLE,
+    FOCUS_POLL_INTERVAL,
+    FOCUS_POLL_TIMEOUT,
+    INJECTION_TIMEOUT,
+    get_ide_focus_command,
+    get_injection_mode,
+    get_restore_focus,
+)
 from samantha.injection.clipboard import copy_to_clipboard, preserved_clipboard
 from samantha.injection.detection import (
     FOCUS_EDITOR,
+    FOCUS_INPUT,
     FOCUS_OTHER,
     FOCUS_TERMINAL,
     FOCUS_UNKNOWN,
@@ -30,6 +40,77 @@ logger = logging.getLogger("samantha")
 PLATFORM = platform.system()
 
 
+def focus_via_command_palette(app_name: str, command_title: str) -> bool:
+    """Focus the AI input by naming its command, instead of guessing a keystroke.
+
+    The palette is the one mechanism that exists on every platform and in every
+    VS Code-family editor, and a named command carries no when-clause, so this
+    works from the transcript, the editor, or the input alike.
+    """
+    modifiers = {"Darwin": "command down", "Linux": "control down", "Windows": "control down"}
+    modifier = modifiers.get(PLATFORM)
+    if modifier is None or PLATFORM != "Darwin":
+        # Only the macOS driver is implemented; elsewhere the caller keeps the
+        # historical shortcut rather than half-driving an unfamiliar palette.
+        return False
+
+    if not activate_app(app_name):
+        logger.error("Could not activate %s to open its command palette", app_name)
+        return False
+
+    try:
+        subprocess.run(
+            ["osascript", "-e",
+             'tell application "System Events" to keystroke "p" using {command down, shift down}'],
+            check=True, capture_output=True, timeout=INJECTION_TIMEOUT,
+        )
+        time.sleep(COMMAND_PALETTE_SETTLE)
+        subprocess.run(
+            ["osascript", "-e",
+             f'tell application "System Events" to keystroke {json.dumps(command_title)}'],
+            check=True, capture_output=True, timeout=INJECTION_TIMEOUT,
+        )
+        time.sleep(COMMAND_PALETTE_SETTLE)
+        subprocess.run(
+            ["osascript", "-e", 'tell application "System Events" to key code 36'],
+            check=True, capture_output=True, timeout=INJECTION_TIMEOUT,
+        )
+        return True
+    except Exception as e:
+        logger.error("Command palette focus failed for %s: %s", app_name, e)
+        dismiss_command_palette()
+        return False
+
+
+def dismiss_command_palette() -> None:
+    """Close the palette so a failed attempt cannot swallow the next keystrokes."""
+    if PLATFORM != "Darwin":
+        return
+    try:
+        subprocess.run(["osascript", "-e",
+                        'tell application "System Events" to key code 53'],
+                       check=False, capture_output=True, timeout=INJECTION_TIMEOUT)
+    except Exception:
+        pass
+
+
+def wait_for_ai_input_focus(ide_name: str) -> str:
+    """Poll until focus settles, instead of assuming a fixed delay was enough.
+
+    Focus lands in a webview, which is slower than the 200ms the code used to
+    wait before declaring success - so a focus that arrived late was
+    indistinguishable from one that never arrived.
+    """
+    deadline = time.time() + FOCUS_POLL_TIMEOUT
+    state = focused_input_state(ide_name)
+    while state != FOCUS_INPUT and time.time() < deadline:
+        if state == FOCUS_UNKNOWN:
+            return state
+        time.sleep(FOCUS_POLL_INTERVAL)
+        state = focused_input_state(ide_name)
+    return state
+
+
 def ensure_ai_input_focused(ide_name: str) -> bool:
     """Focus the AI input as documented, then verify the request actually landed.
 
@@ -46,12 +127,18 @@ def ensure_ai_input_focused(ide_name: str) -> bool:
     documented auto chain already provides - and which the old unconditional
     "success" return had been suppressing.
     """
-    if not focus_ide_ai_input(ide_name):
+    command_title = get_ide_focus_command(ide_name)
+    if command_title:
+        if not focus_via_command_palette(ide_name, command_title):
+            return False
+    elif not focus_ide_ai_input(ide_name):
         logger.error("Could not focus the AI input in %s", ide_name)
         return False
 
-    state = focused_input_state(ide_name)
+    state = wait_for_ai_input_focus(ide_name)
     if state in (FOCUS_EDITOR, FOCUS_TERMINAL, FOCUS_OTHER):
+        if command_title:
+            dismiss_command_palette()
         logger.error(
             "Refusing to type into %s: after requesting the AI input, focus is %r. "
             "Falling back to the next injection method.", ide_name, state,

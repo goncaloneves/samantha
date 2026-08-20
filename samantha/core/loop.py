@@ -15,6 +15,8 @@ except ImportError:
     VAD_AVAILABLE = False
 
 from samantha.config import (
+    MAX_REATTACH_ATTEMPTS,
+    REATTACH_BACKOFF_SECONDS,
     get_min_audio_energy,
     SAMPLE_RATE,
     CHANNELS,
@@ -73,7 +75,7 @@ def _chunk_has_speech_energy(chunk) -> bool:
     return int(np.abs(chunk).max()) >= get_min_audio_energy()
 
 
-def samantha_loop_thread():
+def _listen_session() -> str:
     """Main Samantha voice assistant loop running in a dedicated thread."""
     global _thread_stop_flag, _tts_playing, _last_tts_time, _tts_start_time, _tts_interrupt, _thread_ready, _tts_done_event, _tts_text_queue
 
@@ -250,12 +252,12 @@ def samantha_loop_thread():
                         # unplugged, permission revoked). Without this the loop spins
                         # forever on an empty queue: no capture, no error, no recovery.
                         if not _input_stream_is_live(stream):
-                            logger.error(
-                                "Audio input stream is no longer active - the microphone "
-                                "was lost. Stopping the listening loop; run samantha_start "
-                                "to reattach."
+                            logger.warning(
+                                "Audio input stream went away - the input device changed "
+                                "(Bluetooth disconnected, headset unplugged). Reattaching "
+                                "to the current default device."
                             )
-                            break
+                            return DEVICE_LOST
                         continue
 
                     chunk_flat = chunk.flatten()
@@ -351,7 +353,44 @@ def samantha_loop_thread():
 
     except Exception as e:
         logger.error("Stream error: %s", e)
+        return DEVICE_LOST
     finally:
         state._audio_stream = None
+
+    return STOPPED
+
+
+DEVICE_LOST = "device-lost"
+STOPPED = "stopped"
+
+
+def samantha_loop_thread():
+    """Keep listening across input-device changes.
+
+    Losing the microphone must not end voice mode. Turning Bluetooth off, or
+    unplugging a headset, tears down the PortAudio stream; the assistant should
+    follow the machine's new default input instead of going silent and waiting
+    to be restarted by hand. PortAudio caches its device list, so the list has
+    to be re-enumerated before reopening or the stream would rebind to the
+    device that just disappeared.
+    """
+    failures = 0
+    while not state._thread_stop_flag:
+        outcome = _listen_session()
+        if outcome == STOPPED or state._thread_stop_flag:
+            break
+
+        failures += 1
+        if failures > MAX_REATTACH_ATTEMPTS:
+            logger.error(
+                "Could not reattach to an input device after %d attempts - stopping. "
+                "Check that a microphone is available, then run samantha_start.",
+                MAX_REATTACH_ATTEMPTS,
+            )
+            break
+
+        time.sleep(REATTACH_BACKOFF_SECONDS)
+        playback.refresh_audio_devices()
+        logger.info("Reattaching to the current default input device (attempt %d)", failures)
 
     logger.info("🛑 Samantha thread stopped")
