@@ -15,6 +15,7 @@ except ImportError:
     VAD_AVAILABLE = False
 
 from samantha.config import (
+    get_min_audio_energy,
     SAMPLE_RATE,
     CHANNELS,
     VOICE_MESSAGE_PREFIX,
@@ -42,6 +43,19 @@ from samantha.injection.inject import inject_into_app
 import samantha.core.state as state
 
 logger = logging.getLogger("samantha")
+
+
+def _chunk_has_speech_energy(chunk) -> bool:
+    """Energy-based speech detection for when webrtcvad is unavailable.
+
+    Returning a constant True here made is_speech unconditionally true, so
+    silence was never observed, the silence threshold never tripped, and the
+    transcription branch was unreachable: Samantha listened forever and never
+    heard anything, with no error logged anywhere.
+    """
+    if len(chunk) == 0:
+        return False
+    return int(np.abs(chunk).max()) >= get_min_audio_energy()
 
 
 def samantha_loop_thread():
@@ -223,7 +237,7 @@ def samantha_loop_thread():
                     chunk_flat = chunk.flatten()
                     audio_chunks.append(chunk_flat)
 
-                    if not is_active:
+                    if not is_active and not speech_detected:
                         max_chunks = MAX_INACTIVE_AUDIO_MS // VAD_CHUNK_DURATION_MS
                         if len(audio_chunks) > max_chunks:
                             audio_chunks = audio_chunks[-max_chunks:]
@@ -236,9 +250,9 @@ def samantha_loop_thread():
                         try:
                             is_speech = vad.is_speech(vad_chunk.tobytes(), VAD_SAMPLE_RATE)
                         except Exception:
-                            is_speech = True
+                            is_speech = _chunk_has_speech_energy(chunk_flat)
                     else:
-                        is_speech = True
+                        is_speech = _chunk_has_speech_energy(chunk_flat)
 
                     if not speech_detected:
                         if is_speech:

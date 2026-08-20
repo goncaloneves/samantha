@@ -26,7 +26,7 @@ def check_for_wake_word(text: str) -> Optional[str]:
         return None
     text_clean = normalize_text(text)
     for wake_word in get_wake_words():
-        if wake_word in text_clean:
+        if normalize_text(wake_word) in text_clean:
             return wake_word
     return None
 
@@ -35,7 +35,25 @@ def check_for_stop_phrase(text: str) -> bool:
     if not text:
         return False
     text_clean = normalize_text(text)
-    return any(phrase in text_clean for phrase in get_stop_phrases())
+    return any(normalize_text(phrase) in text_clean for phrase in get_stop_phrases())
+
+
+def _ends_with_phrase(text_clean: str, phrase: str) -> bool:
+    """Whether an utterance ends with a phrase.
+
+    Two things are load-bearing here. The phrase is normalized the same way the
+    utterance is: the configured lists contain apostrophes ("that's all"), but
+    normalize_text strips punctuation, so those entries could never match and
+    the lists had to carry hand-written "thats all" duplicates to work at all.
+
+    And the match is anchored to the end. A bare substring test fired
+    mid-sentence: "samantha pause the deploy and show me the logs" contains
+    "samantha pause", so the assistant deactivated and discarded the command.
+    """
+    phrase_clean = normalize_text(phrase)
+    if not phrase_clean:
+        return False
+    return text_clean == phrase_clean or text_clean.endswith(" " + phrase_clean)
 
 
 def check_for_deactivation(text: str) -> bool:
@@ -43,7 +61,7 @@ def check_for_deactivation(text: str) -> bool:
     if not text:
         return False
     text_clean = normalize_text(text)
-    return any(phrase in text_clean for phrase in get_deactivation_phrases())
+    return any(_ends_with_phrase(text_clean, phrase) for phrase in get_deactivation_phrases())
 
 
 def clean_command(text: str) -> str:

@@ -12,7 +12,7 @@ import time
 import numpy as np
 import sounddevice as sd
 
-from samantha.config import KOKORO_URL, get_voice, get_output_device
+from samantha.config import KOKORO_URL, SYSTEM_PLAYER_TIMEOUT, get_voice, get_output_device
 from samantha.utils.logging import log_conversation
 
 logger = logging.getLogger("samantha")
@@ -234,7 +234,8 @@ def _speak_with_system_player(text: str) -> bool:
             system = platform.system()
 
             if system == "Darwin":
-                subprocess.run(["afplay", temp_path], check=True)
+                subprocess.run(["afplay", temp_path], check=True,
+                               timeout=SYSTEM_PLAYER_TIMEOUT)
             elif system == "Linux":
                 # Try available Linux audio players
                 for player in ["paplay", "pw-play", "aplay", "ffplay"]:
@@ -242,7 +243,8 @@ def _speak_with_system_player(text: str) -> bool:
                         cmd = [player, temp_path]
                         if player == "ffplay":
                             cmd = ["ffplay", "-nodisp", "-autoexit", temp_path]
-                        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL, timeout=SYSTEM_PLAYER_TIMEOUT)
                         break
                 else:
                     logger.error("TTS fallback error: no audio player found on Linux")

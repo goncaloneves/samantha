@@ -7,8 +7,8 @@ import subprocess
 import time
 
 import samantha.audio.playback as playback
-from samantha.config import get_injection_mode, get_restore_focus
-from samantha.injection.clipboard import copy_to_clipboard
+from samantha.config import INJECTION_TIMEOUT, get_injection_mode, get_restore_focus
+from samantha.injection.clipboard import copy_to_clipboard, preserved_clipboard
 from samantha.injection.detection import (
     activate_app,
     activate_terminal_with_ai,
@@ -37,7 +37,8 @@ def simulate_paste_and_enter() -> bool:
             end tell
             """
             subprocess.run(
-                ["osascript", "-e", applescript], check=True, capture_output=True
+                ["osascript", "-e", applescript], check=True,
+                capture_output=True, timeout=INJECTION_TIMEOUT
             )
             return True
         elif PLATFORM == "Linux":
@@ -498,6 +499,11 @@ def inject_into_app(text: str, log_type: str = None):
 
     Captures frontmost app right before injection and restores focus after.
     """
+    with preserved_clipboard():
+        return _inject_into_app(text, log_type)
+
+
+def _inject_into_app(text: str, log_type: str = None):
     previous_app = get_frontmost_app() if get_restore_focus() else None
     injection_mode = get_injection_mode()
 

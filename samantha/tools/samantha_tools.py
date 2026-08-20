@@ -17,7 +17,13 @@ from samantha.config import (
     get_wake_words,
 )
 import samantha.audio.playback as playback
-from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere, get_running_ide, find_terminal_with_ai
+from samantha.injection.detection import (
+    kill_orphaned_processes,
+    is_samantha_running_elsewhere,
+    is_samantha_entrypoint,
+    get_running_ide,
+    find_terminal_with_ai,
+)
 from samantha.services.health import (
     ensure_kokoro_running,
     ensure_whisper_running,
@@ -45,15 +51,16 @@ async def samantha_start() -> str:
     Returns:
         Status message
     """
-    # Always clean up orphaned processes first to prevent accumulation
-    kill_orphaned_processes()
-
     already_running = (
         (state._samantha_thread and state._samantha_thread.is_alive())
         or is_samantha_running_elsewhere()
     )
     if already_running:
         return "🎧 Samantha is already running. Use /samantha:stop to stop it."
+
+    # Only after we know no live instance owns the loop: reap leftover services.
+    # Reaping BEFORE this check tore down the services a running peer was using.
+    kill_orphaned_processes()
 
     if SAMANTHA_ACTIVE_FILE.exists():
         SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
@@ -115,7 +122,7 @@ async def samantha_stop() -> str:
             pid_content = SAMANTHA_ACTIVE_FILE.read_text().strip()
             if pid_content:
                 recorded_pid = int(pid_content)
-                if recorded_pid != os.getpid():
+                if recorded_pid != os.getpid() and is_samantha_entrypoint(recorded_pid):
                     try:
                         os.kill(recorded_pid, signal.SIGTERM)
                         logger.info("Sent SIGTERM to recorded PID: %d", recorded_pid)
@@ -161,8 +168,7 @@ async def samantha_stop() -> str:
     state._audio_stream = None
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
-    # Clean up any remaining orphan processes
-    kill_orphaned_processes()
+    kill_orphaned_processes(include_services=True)
 
     return "🛑 Samantha stopped"
 

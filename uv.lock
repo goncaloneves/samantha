@@ -4922,6 +4922,15 @@ test = [
     { name = "pytest-xdist" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "pytest-timeout" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
@@ -4975,6 +4984,15 @@ requires-dist = [
     { name = "webrtcvad", specifier = ">=2.0.10" },
 ]
 provides-extras = ["coreml", "dev", "docs", "livekit", "notebooks", "scripts", "test"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+    { name = "pytest-mock", specifier = ">=3.10.0" },
+    { name = "pytest-timeout", specifier = ">=2.2.0" },
+]
 
 [[package]]
 name = "scipy"

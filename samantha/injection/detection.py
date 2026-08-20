@@ -9,7 +9,11 @@ import shutil
 import subprocess
 import time
 
+import psutil
+
 from samantha.config import (
+    APP_ACTIVATION_TIMEOUT,
+    SERVICE_SHUTDOWN_GRACE,
     IDE_PROCESS_NAMES,
     DESKTOP_APP_NAMES,
     SUPPORTED_DESKTOP_APPS,
@@ -91,11 +95,13 @@ def activate_app(app_name: str) -> bool:
                 activate
             end tell
             '''
-            subprocess.run(["osascript", "-e", applescript], check=True, capture_output=True)
+            subprocess.run(["osascript", "-e", applescript], check=True,
+                           capture_output=True, timeout=APP_ACTIVATION_TIMEOUT)
             return True
         elif PLATFORM == "Linux":
             if shutil.which("xdotool"):
-                subprocess.run(["xdotool", "search", "--name", app_name, "windowactivate"], check=True)
+                subprocess.run(["xdotool", "search", "--name", app_name, "windowactivate"],
+                               check=True, timeout=APP_ACTIVATION_TIMEOUT)
                 return True
             elif shutil.which("wmctrl"):
                 subprocess.run(["wmctrl", "-a", app_name], check=True)
@@ -172,45 +178,121 @@ def is_samantha_running_elsewhere() -> bool:
         return False
 
 
-def kill_orphaned_processes():
-    """Kill all samantha-related processes (MCP servers and services)."""
+SAMANTHA_SERVICE_MARKERS = (
+    os.path.join(os.sep, ".samantha", "services", "whisper") + os.sep,
+    os.path.join(os.sep, ".samantha", "services", "kokoro") + os.sep,
+)
+
+
+def _classify_samantha_process(proc) -> str:
+    """Classify a process as a Samantha 'entrypoint', 'service', or '' (neither).
+
+    Matching is on argv STRUCTURE, restricted to the executable and script
+    positions. The previous implementation substring-tested whole ``ps aux``
+    lines, so any process that merely mentioned a Samantha path - a grep, an
+    editor with the file open, a diagnostic shell - was classified and killed.
+    """
     try:
-        our_pid = os.getpid()
-        # Use ps to get full command lines for proper filtering
-        result = subprocess.run(
-            ["ps", "aux"], capture_output=True, text=True, timeout=5
-        )
+        cmdline = proc.cmdline()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return ""
 
-        for line in result.stdout.strip().split('\n'):
-            # Match samantha entry points and services
-            is_samantha_process = (
-                '/bin/samantha' in line or
-                'samantha/__main__' in line or
-                'uv run samantha' in line or
-                '/.samantha/services/whisper' in line or
-                '/.samantha/services/kokoro' in line
-            )
+    for arg in cmdline[:2]:
+        if not arg:
+            continue
+        if os.path.basename(arg) == "samantha" and os.sep in arg:
+            return "entrypoint"
+        if any(marker in arg for marker in SAMANTHA_SERVICE_MARKERS):
+            return "service"
 
-            if is_samantha_process:
-                parts = line.split()
-                if len(parts) >= 2:
-                    try:
-                        pid = int(parts[1])
-                        if pid != our_pid:
-                            os.kill(pid, signal.SIGTERM)  # Graceful first
-                            logger.info("Sent SIGTERM to samantha process: %d", pid)
-                            # Give it a moment to clean up
-                            time.sleep(0.1)
-                            try:
-                                os.kill(pid, 0)  # Check if still alive
-                                os.kill(pid, signal.SIGKILL)  # Force kill
-                                logger.info("Sent SIGKILL to samantha process: %d", pid)
-                            except ProcessLookupError:
-                                pass  # Already dead, good
-                    except (ValueError, ProcessLookupError, PermissionError) as e:
-                        logger.debug("Could not kill PID from line '%s': %s", line[:80], e)
-    except Exception as e:
-        logger.warning("Orphan cleanup failed: %s", e)
+    if len(cmdline) >= 3 and cmdline[1] == "-m" and cmdline[2].split(".")[0] == "samantha":
+        return "entrypoint"
+    return ""
+
+
+def _protected_pids() -> set:
+    """PIDs that must never be signalled: us, our ancestors, and the lock owner."""
+    from samantha.config import SAMANTHA_ACTIVE_FILE
+
+    protected = {os.getpid()}
+    try:
+        for parent in psutil.Process().parents():
+            protected.add(parent.pid)
+    except Exception:
+        pass
+    try:
+        if SAMANTHA_ACTIVE_FILE.exists():
+            content = SAMANTHA_ACTIVE_FILE.read_text().strip()
+            if content:
+                protected.add(int(content))
+    except Exception:
+        pass
+    return protected
+
+
+def kill_orphaned_processes(include_services: bool = False) -> int:
+    """Reap leftover Samantha SERVICE processes. Returns how many were signalled.
+
+    This deliberately never signals another Samantha entrypoint. Several Claude
+    sessions legitimately run their own Samantha MCP server against one install,
+    and SIGKILLing a peer silently takes that session's voice down - which is
+    exactly what used to happen, because samantha_start called this before it
+    had even checked whether another instance was running.
+
+    Services are only reaped when no live entrypoint other than ourselves
+    remains to use them, or when the caller explicitly asks (an explicit stop).
+    """
+    protected = _protected_pids()
+    our_uid = os.getuid() if hasattr(os, "getuid") else None
+
+    entrypoints, services = [], []
+    for proc in psutil.process_iter(["pid", "uids"]):
+        if proc.pid in protected:
+            continue
+        if our_uid is not None:
+            try:
+                if proc.uids().real != our_uid:
+                    continue
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        kind = _classify_samantha_process(proc)
+        if kind == "entrypoint":
+            entrypoints.append(proc)
+        elif kind == "service":
+            services.append(proc)
+
+    if entrypoints:
+        logger.debug("Leaving %d live Samantha peer(s) alone: %s",
+                     len(entrypoints), [p.pid for p in entrypoints])
+
+    if not include_services and entrypoints:
+        return 0
+
+    killed = 0
+    for proc in services:
+        try:
+            proc.terminate()
+            logger.info("Terminated orphaned Samantha service: %d", proc.pid)
+            killed += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    if services:
+        gone, alive = psutil.wait_procs(services, timeout=SERVICE_SHUTDOWN_GRACE)
+        for proc in alive:
+            try:
+                proc.kill()
+                logger.info("Killed unresponsive Samantha service: %d", proc.pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    return killed
+
+
+def is_samantha_entrypoint(pid: int) -> bool:
+    """Whether a PID is actually one of our MCP servers - checked before signalling it."""
+    try:
+        return _classify_samantha_process(psutil.Process(pid)) == "entrypoint"
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return False
 
 
 def _is_app_running_with_windows(app_name: str) -> bool:

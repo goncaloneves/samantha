@@ -47,6 +47,19 @@ dependencies = [
     "pyyaml>=6.0.0",
 ]
 
+[dependency-groups]
+# PEP 735 group so `uv sync` installs the test tooling by default. Without it a
+# fresh clone has no pytest, and because pyproject sets both --strict-config and
+# asyncio_mode = "auto", `pytest` there does not degrade - it hard-errors on an
+# unknown ini key, which reads like a broken repo rather than a missing dep.
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10.0",
+    "pytest-timeout>=2.2.0",
+]
+
 [project.optional-dependencies]
 livekit = [
     "livekit>=0.13.1",
