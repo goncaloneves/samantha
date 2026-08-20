@@ -1,5 +1,6 @@
 """Samantha MCP tools - Voice assistant with wake word detection and TTS."""
 
+import asyncio
 import json
 import logging
 import os
@@ -17,7 +18,11 @@ from samantha.config import (
 )
 import samantha.audio.playback as playback
 from samantha.injection.detection import kill_orphaned_processes, is_samantha_running_elsewhere, get_running_ide, find_terminal_with_ai
-from samantha.services.health import ensure_kokoro_running, ensure_whisper_running
+from samantha.services.health import (
+    ensure_kokoro_running,
+    ensure_whisper_running,
+    _check_service_health,
+)
 from samantha.core.loop import samantha_loop_thread
 import samantha.core.state as state
 
@@ -162,6 +167,18 @@ async def samantha_stop() -> str:
     return "🛑 Samantha stopped"
 
 
+def _speak_direct(text: str) -> bool:
+    """Run the blocking TTS path, serialized so two speaks never overlap.
+
+    refresh_audio_devices() tears PortAudio down and back up, which would
+    invalidate a stream another concurrent speak still holds open, so the
+    refresh and the playback must happen under the same lock.
+    """
+    with playback._direct_speak_lock:
+        playback.refresh_audio_devices()
+        return playback.speak_tts_sync(text)
+
+
 @mcp.tool()
 async def samantha_speak(text: str) -> str:
     """Speak text via Samantha TTS."""
@@ -172,14 +189,28 @@ async def samantha_speak(text: str) -> str:
             with playback._tts_queue_lock:
                 playback._tts_text_queue.append(text)
             return f"🔊 Spoke: {text}"
-        else:
-            logger.info("Samantha not running, speaking directly")
-            playback.refresh_audio_devices()
-            success = playback.speak_tts_sync(text)
-            if success:
-                return f"🔊 Spoke: {text}"
-            else:
-                return "❌ TTS failed: Kokoro service may not be running"
+
+        logger.info("Samantha not running, speaking directly")
+
+        if not await ensure_kokoro_running():
+            return "❌ TTS failed: Kokoro TTS is not running and could not be started"
+
+        try:
+            success = await asyncio.wait_for(
+                asyncio.to_thread(_speak_direct, text),
+                timeout=playback.TTS_TOTAL_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            playback._tts_interrupt = True
+            logger.error(
+                "TTS exceeded %.0fs - abandoning playback so the server stays responsive",
+                playback.TTS_TOTAL_TIMEOUT,
+            )
+            return f"❌ TTS timed out after {playback.TTS_TOTAL_TIMEOUT:.0f}s"
+
+        if success:
+            return f"🔊 Spoke: {text}"
+        return "❌ TTS failed: check Kokoro TTS and the audio output device"
     except Exception as e:
         return f"❌ TTS failed: {e}"
 
@@ -204,9 +235,30 @@ async def samantha_status() -> str:
     Returns:
         JSON status
     """
-    active = SAMANTHA_ACTIVE_FILE.exists()
+    active = False
+    pid = None
+
+    if SAMANTHA_ACTIVE_FILE.exists():
+        try:
+            pid = int(SAMANTHA_ACTIVE_FILE.read_text().strip())
+        except (ValueError, OSError):
+            pid = None
+        if pid is not None:
+            try:
+                os.kill(pid, 0)
+                active = True
+            except PermissionError:
+                active = True
+            except (ProcessLookupError, OSError):
+                logger.info("Clearing stale lock file for dead PID %s", pid)
+                SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
+                pid = None
+
     return json.dumps({
         "active": active,
+        "pid": pid,
+        "kokoro": await _check_service_health("http://localhost:8880/health"),
+        "whisper": await _check_service_health("http://localhost:2022/health"),
         "wake_words": get_wake_words()[:5],
         "log_file": str(CONVERSATION_LOG)
     })

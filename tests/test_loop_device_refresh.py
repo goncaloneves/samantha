@@ -13,6 +13,7 @@ loop's input stream is open then and tearing PortAudio down would kill it.
 """
 
 import threading
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -97,9 +98,12 @@ def test_refresh_helper_swallows_initialize_failure(mocker):
     playback.refresh_audio_devices()
 
 
-async def test_speak_direct_path_refreshes_before_playing(mocker, restore_state):
+async def test_speak_direct_path_refreshes_before_playing(mocker, monkeypatch, restore_state):
     """When the loop is NOT running, the standalone speak path must refresh first."""
     state._samantha_thread = None
+    monkeypatch.setattr(
+        tools, "ensure_kokoro_running", AsyncMock(return_value=True), raising=False
+    )
     order = []
     mocker.patch.object(tools.playback, "refresh_audio_devices", side_effect=lambda: order.append("refresh"))
     mocker.patch.object(tools.playback, "speak_tts_sync", side_effect=lambda _: order.append("speak") or True)

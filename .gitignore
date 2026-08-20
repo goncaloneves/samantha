@@ -118,3 +118,7 @@ models/
 # Coverage reports (duplicates removed - already in Python section)
 coverage.xml
 voicemode-install-feedback.md
+.venv/
+htmlcov/
+coverage.xml
+.coverage
