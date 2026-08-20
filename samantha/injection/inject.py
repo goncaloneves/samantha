@@ -11,7 +11,8 @@ from samantha.config import INJECTION_TIMEOUT, get_injection_mode, get_restore_f
 from samantha.injection.clipboard import copy_to_clipboard, preserved_clipboard
 from samantha.injection.detection import (
     FOCUS_EDITOR,
-    FOCUS_INPUT,
+    FOCUS_OTHER,
+    FOCUS_TERMINAL,
     FOCUS_UNKNOWN,
     focused_input_state,
     activate_app,
@@ -30,50 +31,36 @@ PLATFORM = platform.system()
 
 
 def ensure_ai_input_focused(ide_name: str) -> bool:
-    """Guarantee focus is in a usable text input before anything is typed.
+    """Focus the AI input as documented, then verify the request actually landed.
 
-    Previously this fired a focus shortcut and pasted regardless of the result,
-    and reported success whenever osascript exited 0 - which it does even when
-    the keystroke lands somewhere that ignores it. Dictation was therefore lost
-    silently while the log said the injection had succeeded.
+    The focus shortcut is ALWAYS sent. README documents that as the contract,
+    and the probe cannot positively identify the AI input: the integrated
+    terminal, quick open and the find widget all present the same accessibility
+    signature as a chat box. Using the probe to SKIP focusing would therefore
+    paste a transcript into whatever text field happened to be focused - a shell
+    prompt included, followed by Return.
 
-    The order matters: check FIRST. When the user has just typed in the AI
-    input, focus is already correct and sending the shortcut moves it away -
-    which is the common case and the one that broke.
+    So the probe is used only to REFUSE, never to skip work. When it can see
+    that focus ended up somewhere unusable, this returns False and the caller
+    falls through to the next injection method, which is the recovery the
+    documented auto chain already provides - and which the old unconditional
+    "success" return had been suppressing.
     """
-    state = focused_input_state(ide_name)
-    if state == FOCUS_INPUT:
-        return True
-
-    if state == FOCUS_EDITOR:
-        logger.debug("Focus is in the code editor; asking the IDE for its AI input")
     if not focus_ide_ai_input(ide_name):
         logger.error("Could not focus the AI input in %s", ide_name)
         return False
 
     state = focused_input_state(ide_name)
-    if state == FOCUS_INPUT:
-        return True
-
-    if state == FOCUS_UNKNOWN:
-        # No instrument. Focus reading is implemented via the macOS Accessibility
-        # API, so on Linux and Windows - and on macOS when the app is not
-        # frontmost or Accessibility permission is missing - there is nothing to
-        # check against. Refusing here would disable injection outright on those
-        # platforms, so fall back to the historical best-effort behaviour: this
-        # path is never worse than before, only unverified.
-        logger.debug(
-            "Cannot verify focus in %s on this platform; proceeding unverified", ide_name
+    if state in (FOCUS_EDITOR, FOCUS_TERMINAL, FOCUS_OTHER):
+        logger.error(
+            "Refusing to type into %s: after requesting the AI input, focus is %r. "
+            "Falling back to the next injection method.", ide_name, state,
         )
-        return True
+        return False
 
-    # Focus was READ and is definitively wrong. Typing here would either vanish
-    # or land in the user's source file, so type nothing and say so.
-    logger.error(
-        "Refusing to type into %s: focus is %r, not a usable text input. "
-        "Click into the AI input and speak again.", ide_name, state,
-    )
-    return False
+    # FOCUS_INPUT, or FOCUS_UNKNOWN where there is no probe (Linux, Windows, or
+    # macOS without Accessibility permission). Both proceed exactly as before.
+    return True
 
 
 def simulate_paste_and_enter() -> bool:

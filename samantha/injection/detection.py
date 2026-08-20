@@ -88,12 +88,17 @@ def get_frontmost_app() -> str:
 
 FOCUS_INPUT = "input"
 FOCUS_EDITOR = "editor"
+FOCUS_TERMINAL = "terminal"
 FOCUS_OTHER = "other"
 FOCUS_UNKNOWN = "unknown"
 
 TEXT_INPUT_ROLES = ("AXTextArea", "AXTextField", "AXComboBox")
 EDITOR_ROLE_DESCRIPTION = "editor"
 EDITOR_CLASS_MARKERS = ("monaco",)
+# The integrated terminal's input is <textarea class="xterm-helper-textarea">,
+# which carries no aria-roledescription and no monaco class - so it is otherwise
+# indistinguishable from a chat box, and pasting there submits a shell command.
+TERMINAL_CLASS_MARKERS = ("xterm",)
 
 _FOCUS_PROBE_APPLESCRIPT = """
 tell application "System Events" to tell process "{app}"
@@ -123,13 +128,17 @@ def focused_input_state(app_name: str) -> str:
     that currently HAS focus is readable, and that is enough to refuse to type
     into the wrong place.
 
-    A code editor and a chat box both report AXTextArea, so the role alone
-    would happily paste dictation into a source file. They are separated by
-    AXRoleDescription ("editor" vs "text entry area") and, as a second
-    independent signal, by Monaco's class marker - which is shared by VS Code,
-    Cursor and Windsurf, so this stays generic rather than fingerprinting one
-    extension. Anything unrecognised is reported as such and the caller must
-    fail closed.
+    IMPORTANT: FOCUS_INPUT does NOT mean "the AI input". It means "a text input
+    that is recognisably neither the code editor nor the terminal". Quick open,
+    the find widget and the settings search all land here too, so this result
+    must never be used to SKIP focusing the AI panel - only to refuse when the
+    focused element is one we can positively identify as the wrong target.
+
+    A code editor, a terminal and a chat box all report AXTextArea, so the role
+    alone would paste dictation into a source file or a shell prompt. Editors
+    are separated by AXRoleDescription ("editor") plus Monaco's class marker -
+    shared by VS Code, Cursor and Windsurf, so this stays generic rather than
+    fingerprinting one extension - and terminals by xterm's class marker.
     """
     if PLATFORM != "Darwin":
         return FOCUS_UNKNOWN
@@ -157,10 +166,13 @@ def focused_input_state(app_name: str) -> str:
         return FOCUS_UNKNOWN
     if role not in TEXT_INPUT_ROLES:
         return FOCUS_OTHER
+    lowered = class_list.lower()
     if role_description.lower() == EDITOR_ROLE_DESCRIPTION:
         return FOCUS_EDITOR
-    if any(marker in class_list.lower() for marker in EDITOR_CLASS_MARKERS):
+    if any(marker in lowered for marker in EDITOR_CLASS_MARKERS):
         return FOCUS_EDITOR
+    if any(marker in lowered for marker in TERMINAL_CLASS_MARKERS):
+        return FOCUS_TERMINAL
     return FOCUS_INPUT
 
 

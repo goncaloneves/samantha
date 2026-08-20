@@ -26,6 +26,9 @@ def _probe(stdout, returncode=0):
 CHAT_INPUT = "AXTextArea|text entry area|messageInput_cKsPxg"
 MONACO_EDITOR = "AXTextArea|editor|inputareamonaco-mouse-cursor-text"
 TRANSCRIPT_GROUP = "AXGroup|group|"
+# Cursor's integrated terminal: <textarea class="xterm-helper-textarea">, no
+# aria-roledescription and no monaco class - otherwise identical to a chat box.
+XTERM_TERMINAL = "AXTextArea|text entry area|xterm-helper-textarea"
 NOT_FRONTMOST = "||"
 
 
@@ -38,6 +41,7 @@ def darwin(mocker):
     (CHAT_INPUT, detection.FOCUS_INPUT),
     (MONACO_EDITOR, detection.FOCUS_EDITOR),
     (TRANSCRIPT_GROUP, detection.FOCUS_OTHER),
+    (XTERM_TERMINAL, detection.FOCUS_TERMINAL),
     (NOT_FRONTMOST, detection.FOCUS_UNKNOWN),
 ])
 def test_focus_is_classified_from_the_real_signatures(mocker, probe, expected):
@@ -57,19 +61,47 @@ def test_a_probe_failure_fails_closed(mocker):
     assert detection.focused_input_state("Cursor") == detection.FOCUS_UNKNOWN
 
 
-def test_an_already_focused_input_is_not_disturbed(mocker):
-    """The common case, and the one that broke: the user has just typed in the
-    input, so focus is already correct - and the old code moved it away."""
+def test_the_focus_shortcut_is_always_sent(mocker):
+    """It must never be skipped on the strength of the probe.
+
+    FOCUS_INPUT does not mean "the AI input" - the terminal, quick open and the
+    find widget all reach it. Skipping the shortcut because focus already looks
+    like a text input would paste the transcript into whatever that field is,
+    then press Return. README documents the shortcut as unconditional.
+    """
     mocker.patch.object(inject, "focused_input_state", return_value=detection.FOCUS_INPUT)
-    focus = mocker.patch.object(inject, "focus_ide_ai_input")
+    focus = mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
 
     assert inject.ensure_ai_input_focused("Cursor") is True
-    focus.assert_not_called(), "sent a focus shortcut when focus was already correct"
+    focus.assert_called_once(), "the documented focus shortcut was skipped"
 
 
-def test_focus_is_requested_then_reverified(mocker):
-    states = iter([detection.FOCUS_EDITOR, detection.FOCUS_INPUT])
-    mocker.patch.object(inject, "focused_input_state", side_effect=lambda _: next(states))
+def test_a_focused_terminal_is_never_typed_into(mocker):
+    """The dangerous case: pasting here submits a shell command."""
+    mocker.patch.object(detection, "PLATFORM", "Darwin")
+    mocker.patch.object(detection.subprocess, "run", return_value=_probe(XTERM_TERMINAL))
+    assert detection.focused_input_state("Cursor") == detection.FOCUS_TERMINAL
+
+    mocker.patch.object(inject, "focused_input_state", return_value=detection.FOCUS_TERMINAL)
+    mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
+    assert inject.ensure_ai_input_focused("Cursor") is False
+
+
+def test_the_terminal_and_the_chat_box_are_told_apart(mocker):
+    """They differ only by class; every other attribute is identical."""
+    mocker.patch.object(detection, "PLATFORM", "Darwin")
+    seen = {}
+    for name, probe in (("chat", CHAT_INPUT), ("terminal", XTERM_TERMINAL)):
+        mocker.patch.object(detection.subprocess, "run", return_value=_probe(probe))
+        seen[name] = detection.focused_input_state("Cursor")
+    assert seen["chat"] != seen["terminal"], (
+        f"terminal and chat box classify identically ({seen}) - a transcript "
+        "would be executed as a shell command"
+    )
+
+
+def test_focus_is_requested_then_verified(mocker):
+    mocker.patch.object(inject, "focused_input_state", return_value=detection.FOCUS_INPUT)
     focus = mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
 
     assert inject.ensure_ai_input_focused("Cursor") is True
@@ -128,7 +160,9 @@ def test_refusal_is_reserved_for_a_focus_we_actually_read(mocker):
     """Both directions: unknown proceeds, a READ wrong focus refuses."""
     mocker.patch.object(inject, "focus_ide_ai_input", return_value=True)
     for state, expected in ((detection.FOCUS_UNKNOWN, True),
+                            (detection.FOCUS_INPUT, True),
                             (detection.FOCUS_EDITOR, False),
+                            (detection.FOCUS_TERMINAL, False),
                             (detection.FOCUS_OTHER, False)):
         mocker.patch.object(inject, "focused_input_state", return_value=state)
         assert inject.ensure_ai_input_focused("Cursor") is expected, state
