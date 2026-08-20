@@ -225,18 +225,18 @@ async def samantha_speak(text: str) -> str:
         if not await ensure_kokoro_running():
             return "❌ TTS failed: Kokoro TTS is not running and could not be started"
 
+        deadline = playback.tts_timeout_for(text)
         try:
             success = await asyncio.wait_for(
-                asyncio.to_thread(_speak_direct, text),
-                timeout=playback.TTS_TOTAL_TIMEOUT,
+                asyncio.to_thread(_speak_direct, text), timeout=deadline
             )
         except asyncio.TimeoutError:
             playback._tts_interrupt = True
             logger.error(
-                "TTS exceeded %.0fs - abandoning playback so the server stays responsive",
-                playback.TTS_TOTAL_TIMEOUT,
+                "TTS exceeded %.0fs for %d characters - abandoning playback so the "
+                "server stays responsive", deadline, len(text),
             )
-            return f"❌ TTS timed out after {playback.TTS_TOTAL_TIMEOUT:.0f}s"
+            return f"❌ TTS timed out after {deadline:.0f}s"
 
         if success:
             return f"🔊 Spoke: {text}"

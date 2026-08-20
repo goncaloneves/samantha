@@ -9,6 +9,7 @@ Each test is written so it FAILS if the guard it covers is removed.
 """
 
 import asyncio
+import logging
 import os
 import pathlib
 import tempfile
@@ -225,3 +226,108 @@ async def test_status_reports_a_live_daemon_as_active(mocker, monkeypatch):
     assert out["active"] is True
     assert out["pid"] == os.getpid()
     assert out["kokoro"] is True and out["whisper"] is True
+
+
+def test_the_speech_deadline_scales_with_the_utterance():
+    """A fixed wall-clock ceiling truncated healthy long-form speech.
+
+    Playback runs in real time and Kokoro yields roughly 18 characters of input
+    per second of audio, so a constant ceiling cuts off anything past about
+    3200 characters mid-sentence while the device is working perfectly.
+    """
+    chars_per_second_of_audio = 18.1
+    for length in (50, 500, 3250, 5040, 20000):
+        deadline = playback.tts_timeout_for("x" * length)
+        audio_seconds = length / chars_per_second_of_audio
+        assert deadline > audio_seconds, (
+            f"{length} chars needs {audio_seconds:.0f}s of playback but the deadline "
+            f"is {deadline:.0f}s - long speech would be truncated"
+        )
+
+
+def test_short_utterances_keep_the_floor():
+    assert playback.tts_timeout_for("hi") == playback.TTS_MIN_TOTAL_TIMEOUT
+
+
+async def test_a_long_healthy_utterance_is_not_cut_off(mocker, caplog, restore_state):
+    """End to end: a long utterance on a healthy (slow, real-time) device must
+    play to completion rather than being abandoned by the backstop."""
+    import samantha.core.state as st
+    st._samantha_thread = None
+
+    class _Realtime:
+        def __init__(self, *a, **k):
+            self.written = 0
+            self.aborted = False
+        def start(self): pass
+        def write(self, arr):
+            time.sleep(0.002)
+            self.written += len(arr)
+        def abort(self): self.aborted = True
+        def stop(self): pass
+        def close(self): pass
+
+    held = {}
+    mocker.patch.object(playback.sd, "OutputStream",
+                        side_effect=lambda *a, **k: held.setdefault("s", _Realtime()))
+
+    class _Resp:
+        status_code = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def iter_content(self, chunk_size=1024):
+            for _ in range(400):
+                yield b"\x00\x01" * 512
+
+    import requests
+    mocker.patch.object(requests, "post", return_value=_Resp())
+    mocker.patch.object(tools, "ensure_kokoro_running", new=AsyncMock(return_value=True))
+    mocker.patch.object(playback, "TTS_MIN_TOTAL_TIMEOUT", 1.0)   # force the scaling path
+    mocker.patch.object(playback, "TTS_CHARS_PER_SECOND_OF_AUDIO", 200.0)
+    mocker.patch.object(playback, "TTS_TIMEOUT_OVERHEAD", 5.0)
+
+    long_text = "a long piece of spoken dialogue. " * 60
+
+    with caplog.at_level(logging.ERROR, logger="samantha"):
+        result = await _speak()(long_text)
+
+    assert "timed out" not in result, f"healthy long-form speech was truncated: {result}"
+    # write() takes an int16 ARRAY, so len(arr) is samples: 1024 bytes -> 512 samples
+    samples_per_chunk = 512
+    chunks_played = held["s"].written // samples_per_chunk
+    assert chunks_played == 400, f"only {chunks_played}/400 chunks reached the device"
+    # abort() is called unconditionally during teardown (close() alone can block
+    # on a stalled device), so it is not evidence the watchdog fired. The stall
+    # path is the one that logs.
+    assert not any("stalled" in r.getMessage() for r in caplog.records), (
+        "the stall watchdog fired on a healthy device"
+    )
+
+
+def test_a_stalled_device_still_aborts_despite_a_large_deadline(mocker, monkeypatch, restore_state):
+    """The backstop got much larger, so prove liveness still comes from the
+    watchdog: a stalled device must abort in seconds, not wait out the deadline."""
+    holder = {}
+    mocker.patch.object(playback.sd, "OutputStream",
+                        side_effect=lambda *a, **k: holder.setdefault("s", _StalledStream()))
+    monkeypatch.setattr(playback, "TTS_STALL_TIMEOUT", 1.0, raising=False)
+
+    class _Resp:
+        status_code = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def iter_content(self, chunk_size=1024):
+            return iter([b"\x00\x01" * 512] * 50)
+
+    import requests
+    mocker.patch.object(requests, "post", return_value=_Resp())
+
+    assert playback.tts_timeout_for("x" * 20000) > 1000, "precondition: a large deadline"
+
+    start = time.time()
+    result = playback.speak_tts_sync("x" * 20000)
+    elapsed = time.time() - start
+
+    assert elapsed < 15, f"a stalled device was not aborted promptly ({elapsed:.1f}s)"
+    assert result is False
+    assert holder["s"].abort_called

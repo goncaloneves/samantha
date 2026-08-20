@@ -33,7 +33,31 @@ _tts_state_lock = threading.Lock()
 _tts_generation = 0
 
 TTS_STALL_TIMEOUT = float(os.getenv("SAMANTHA_TTS_STALL_TIMEOUT", "15"))
-TTS_TOTAL_TIMEOUT = float(os.getenv("SAMANTHA_TTS_TOTAL_TIMEOUT", "180"))
+TTS_MIN_TOTAL_TIMEOUT = float(os.getenv("SAMANTHA_TTS_TOTAL_TIMEOUT", "180"))
+
+# Measured against Kokoro: synthesis yields ~18 characters of input per second of
+# audio, flat across utterance length. 15 is the conservative direction (it
+# over-estimates the duration), and playback runs in real time, so the ceiling
+# has to scale with the text or long-form speech is cut off mid-sentence.
+TTS_CHARS_PER_SECOND_OF_AUDIO = 15.0
+TTS_TIMEOUT_SAFETY_FACTOR = 3.0
+TTS_TIMEOUT_OVERHEAD = 30.0
+
+
+def tts_timeout_for(text: str) -> float:
+    """Wall-clock ceiling for speaking ``text``.
+
+    This is a BACKSTOP, not a pacing mechanism: liveness is already guaranteed by
+    the stall watchdog, which aborts within TTS_STALL_TIMEOUT of the device
+    ceasing to accept data. A fixed ceiling here is a false-positive generator -
+    it truncated healthy speech longer than ~3200 characters while the watchdog
+    correctly reported that playback was progressing normally.
+    """
+    estimated_audio_seconds = len(text) / TTS_CHARS_PER_SECOND_OF_AUDIO
+    return max(
+        TTS_MIN_TOTAL_TIMEOUT,
+        estimated_audio_seconds * TTS_TIMEOUT_SAFETY_FACTOR + TTS_TIMEOUT_OVERHEAD,
+    )
 
 
 def claim_tts_generation() -> int:
