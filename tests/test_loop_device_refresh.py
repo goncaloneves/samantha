@@ -127,4 +127,9 @@ async def test_speak_queued_path_does_not_refresh(mocker, restore_state):
     refresh.assert_not_called()
     speak.assert_not_called()
     assert "queued message" in playback._tts_text_queue
-    assert "Spoke" in result
+    # The queued path hands the text to the loop thread and returns immediately;
+    # nothing has been synthesized yet, so it must not claim it has been spoken.
+    assert "Queued" in result
+    assert "Spoke:" not in result, (
+        "the queued path reported completed speech before anything was synthesized"
+    )

@@ -93,7 +93,9 @@ def focus_ide_ai_input(ide_name: str) -> bool:
     """
     try:
         if PLATFORM == "Darwin":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             # Zed uses Cmd+? (Shift+Cmd+/) for assistant::ToggleFocus
             if ide_name.lower() == "zed":
@@ -121,7 +123,9 @@ def focus_ide_ai_input(ide_name: str) -> bool:
             time.sleep(0.2)
             return True
         elif PLATFORM == "Linux":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             if shutil.which("xdotool"):
                 # Zed uses Ctrl+? (Ctrl+Shift+/) for assistant::ToggleFocus
@@ -170,7 +174,9 @@ def focus_ide_ai_input(ide_name: str) -> bool:
                 return True
             return False
         elif PLATFORM == "Windows":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             try:
                 import pyautogui
@@ -220,7 +226,9 @@ def focus_ide_terminal(ide_name: str) -> bool:
     """
     try:
         if PLATFORM == "Darwin":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             # Zed uses Cmd+J for workspace::ToggleBottomDock (terminal)
             if ide_name.lower() == "zed":
@@ -248,7 +256,9 @@ def focus_ide_terminal(ide_name: str) -> bool:
             time.sleep(0.2)
             return True
         elif PLATFORM == "Linux":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             if shutil.which("xdotool"):
                 # Zed uses Ctrl+J for workspace::ToggleBottomDock (terminal)
@@ -288,7 +298,9 @@ def focus_ide_terminal(ide_name: str) -> bool:
                 return True
             return False
         elif PLATFORM == "Windows":
-            activate_app(ide_name)
+            if not activate_app(ide_name):
+                logger.error("Could not activate %s - refusing to send keystrokes blind", ide_name)
+                return False
             time.sleep(0.3)
             try:
                 import pyautogui

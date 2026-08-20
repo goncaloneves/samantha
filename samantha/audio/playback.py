@@ -29,9 +29,41 @@ _post_tts_pending = False
 _active_streams = 0
 _active_streams_lock = threading.Lock()
 _direct_speak_lock = threading.Lock()
+_tts_state_lock = threading.Lock()
+_tts_generation = 0
 
 TTS_STALL_TIMEOUT = float(os.getenv("SAMANTHA_TTS_STALL_TIMEOUT", "15"))
 TTS_TOTAL_TIMEOUT = float(os.getenv("SAMANTHA_TTS_TOTAL_TIMEOUT", "180"))
+
+
+def claim_tts_generation() -> int:
+    """Mark a new utterance as the current one and return its generation token."""
+    global _tts_generation, _tts_playing, _tts_start_time
+    with _tts_state_lock:
+        _tts_generation += 1
+        _tts_playing = True
+        _tts_start_time = time.time()
+        return _tts_generation
+
+
+def release_tts_generation(generation: int) -> bool:
+    """Clear the playing flags, but only if this utterance is still the current one.
+
+    A slow outgoing worker used to reset _tts_playing unconditionally in its
+    finally block. If the next utterance had already started, that cleared the
+    flags out from under live playback, so the loop stopped masking the
+    microphone against Samantha's own voice and treated her as the speaker.
+    Returns whether this call owned the state.
+    """
+    global _tts_playing, _tts_start_time, _last_tts_time, _post_tts_pending
+    with _tts_state_lock:
+        if _tts_generation != generation:
+            return False
+        _last_tts_time = time.time()
+        _tts_start_time = 0
+        _tts_playing = False
+        _post_tts_pending = True
+        return True
 
 
 def refresh_audio_devices() -> None:

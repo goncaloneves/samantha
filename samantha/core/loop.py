@@ -45,6 +45,14 @@ import samantha.core.state as state
 logger = logging.getLogger("samantha")
 
 
+def _input_stream_is_live(stream) -> bool:
+    """Whether the capture stream is still delivering audio."""
+    try:
+        return bool(stream.active)
+    except Exception:
+        return False
+
+
 def _chunk_has_speech_energy(chunk) -> bool:
     """Energy-based speech detection for when webrtcvad is unavailable.
 
@@ -125,8 +133,7 @@ def samantha_loop_thread():
                                 tts_text = playback._tts_text_queue.pop(0)
 
                     if tts_text:
-                        playback._tts_playing = True
-                        playback._tts_start_time = time.time()
+                        tts_generation = playback.claim_tts_generation()
                         state._tts_done_event = threading.Event()
 
                         _clear_queue(audio_queue)
@@ -138,6 +145,8 @@ def samantha_loop_thread():
                         done_event = state._tts_done_event
                         tts_text_to_speak = tts_text
 
+                        my_generation = tts_generation
+
                         def tts_thread_func():
                             playback._last_tts_text = tts_text_to_speak
                             active_words = get_active_interrupt_words()
@@ -145,10 +154,7 @@ def samantha_loop_thread():
                             try:
                                 playback.speak_tts_sync(tts_text_to_speak)
                             finally:
-                                playback._last_tts_time = time.time()
-                                playback._tts_start_time = 0
-                                playback._tts_playing = False
-                                playback._post_tts_pending = True
+                                playback.release_tts_generation(my_generation)
                                 done_event.set()
 
                         tts_thread = threading.Thread(target=tts_thread_func, daemon=True)
@@ -232,6 +238,16 @@ def samantha_loop_thread():
                     try:
                         chunk = audio_queue.get(timeout=0.1)
                     except queue.Empty:
+                        # The callback stops firing when the mic goes away (device
+                        # unplugged, permission revoked). Without this the loop spins
+                        # forever on an empty queue: no capture, no error, no recovery.
+                        if not _input_stream_is_live(stream):
+                            logger.error(
+                                "Audio input stream is no longer active - the microphone "
+                                "was lost. Stopping the listening loop; run samantha_start "
+                                "to reattach."
+                            )
+                            break
                         continue
 
                     chunk_flat = chunk.flatten()

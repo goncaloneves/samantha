@@ -13,6 +13,7 @@ from samantha.config import (
     SAMANTHA_DIR,
     SAMANTHA_ACTIVE_FILE,
     CONVERSATION_LOG,
+    THREAD_READY_TIMEOUT,
     VOICE_MESSAGE_PREFIX,
     get_wake_words,
 )
@@ -84,19 +85,27 @@ async def samantha_start() -> str:
     state._samantha_thread = threading.Thread(target=samantha_loop_thread, daemon=True)
     state._samantha_thread.start()
 
-    ready = state._thread_ready.wait(timeout=30.0)
+    # threading.Event.wait is not a suspension point: awaiting it inline pinned
+    # the single stdio event loop for the full timeout on every audio-open
+    # failure, so no other tool call could be answered meanwhile.
+    ready = await asyncio.to_thread(state._thread_ready.wait, THREAD_READY_TIMEOUT)
 
     if not ready:
         state._thread_stop_flag = True
         SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
-        return "❌ Samantha failed to start - audio stream not ready after 30 seconds. Please try again."
+        return (
+            f"❌ Samantha failed to start - audio stream not ready after "
+            f"{THREAD_READY_TIMEOUT:.0f}s. Check that the microphone is available "
+            f"and that this app has microphone permission."
+        )
 
-    # Check what IDE/terminal was detected
+    # Each of these shells out repeatedly (one osascript per candidate app), so
+    # they must not run on the event-loop thread either.
     detected = []
-    ide = get_running_ide()
+    ide = await asyncio.to_thread(get_running_ide)
     if ide:
         detected.append(f"IDE: {ide}")
-    terminal = find_terminal_with_ai()
+    terminal = await asyncio.to_thread(find_terminal_with_ai)
     if terminal:
         detected.append(f"Terminal: {terminal}")
     
@@ -168,9 +177,21 @@ async def samantha_stop() -> str:
     state._audio_stream = None
     SAMANTHA_ACTIVE_FILE.unlink(missing_ok=True)
 
-    kill_orphaned_processes(include_services=True)
+    services_reaped = kill_orphaned_processes(include_services=True)
 
-    return "🛑 Samantha stopped"
+    # Returning an unconditional success string meant a loop thread that refused
+    # to die, or a peer PID that was never signalled, both read as a clean stop.
+    thread_alive = bool(state._samantha_thread and state._samantha_thread.is_alive())
+    if thread_alive:
+        return (
+            "⚠️ Samantha partially stopped - the listening thread did not exit. "
+            "The lock was released and playback interrupted; if it persists, "
+            "restart the MCP server."
+        )
+    parts = ["🛑 Samantha stopped"]
+    if services_reaped:
+        parts.append(f"({services_reaped} service(s) shut down)")
+    return " ".join(parts)
 
 
 def _speak_direct(text: str) -> bool:
@@ -189,12 +210,15 @@ def _speak_direct(text: str) -> bool:
 async def samantha_speak(text: str) -> str:
     """Speak text via Samantha TTS."""
     try:
-        playback._last_tts_text = text
-
+        # _last_tts_text drives the echo filter and the interrupt mask, so it must
+        # describe what is PLAYING. Setting it at request time made both describe
+        # an utterance that had not started - and speak_tts_sync sets it itself
+        # when playback actually begins, so this was redundant as well as wrong.
         if state._samantha_thread and state._samantha_thread.is_alive():
             with playback._tts_queue_lock:
                 playback._tts_text_queue.append(text)
-            return f"🔊 Spoke: {text}"
+                depth = len(playback._tts_text_queue)
+            return f"🔊 Queued for speech (position {depth}): {text}"
 
         logger.info("Samantha not running, speaking directly")
 
