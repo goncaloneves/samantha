@@ -28,6 +28,7 @@ Samantha enables hands-free voice conversations with AI coding assistants (Claud
 
 - **Wake word activation** - Say "Hey Samantha" to start talking
 - **Always listening** - Works with your laptop mic, no headphones needed
+- **Follows your audio device** - Connect or disconnect headphones mid-conversation and she moves with you (macOS)
 - **Natural conversation** - Speak freely, pauses are detected automatically
 - **Voice control** - Interrupt, skip, or put her to sleep with voice commands
 - **Multiple personalities** - Switch between Samantha, Jarvis, or Alfred profiles
@@ -204,6 +205,7 @@ Create `~/.samantha/config.json` to customize:
 | `min_audio_energy` | Audio threshold to filter background noise | `1500` |
 | `input_device` | Microphone device index | System default |
 | `output_device` | Speaker device index | System default |
+| `ide_focus_commands` | Per-IDE command-palette title that focuses the AI input | Unset |
 
 ### Environment Variables
 
@@ -213,6 +215,11 @@ All settings can also be set via environment variables with the `SAMANTHA_` pref
 export SAMANTHA_PROFILE="jarvis"
 export SAMANTHA_VOICE="bm_lewis"
 export SAMANTHA_USER_NAME="Tony"
+
+# Speech playback guards
+export SAMANTHA_TTS_STALL_TIMEOUT="15"   # seconds with no progress before playback aborts
+export SAMANTHA_TTS_TOTAL_TIMEOUT="180"  # floor for the overall speech deadline, which
+                                         # scales with the length of what is being said
 ```
 
 Config file takes precedence over environment variables.
@@ -227,9 +234,15 @@ Samantha works great with your laptop's built-in microphone - no headphones or e
 
 | Value | Use Case |
 |-------|----------|
+| `500` | Sensitive, for a quiet mic such as a Bluetooth headset |
 | `1500` | Balanced, catches normal speech (default) |
 | `3000` | Conservative, filters typing noise |
 | `5000` | Very conservative, noisy environments |
+
+Microphones differ in gain by a large factor: a Bluetooth headset can put speech
+around `800-1300` where a built-in mic puts the same speech far higher, so a value
+tuned for one will be wrong for the other. If you switch between them, tune for the
+quieter one and accept more filtering on the louder.
 
 ## 🤖 Multi-AI Support
 
@@ -284,6 +297,37 @@ Add these to your config for advanced control:
 | `injection_mode` | `auto`, `extension`, `cli`, `desktop`, or `terminal` | `auto` |
 | `ai_process_pattern` | Regex pattern to detect AI CLI processes | `claude\|gemini\|copilot\|...` |
 | `ai_window_titles` | Window titles to search for AI terminals | `["claude", "gemini", ...]` |
+
+### Focusing the AI Input Reliably
+
+By default Samantha focuses an IDE's AI panel with `Cmd+Escape` (macOS) or
+`Ctrl+Escape` (Linux/Windows). In the VS Code family that key is bound to more
+than one command, separated by when-clauses, so it only means "focus the AI
+input" while the caret is in a code editor. From the conversation transcript or
+from the input itself, the same key means blur - which is why dictation can
+appear to vanish when you click on a reply and then speak.
+
+Naming the command removes the ambiguity, and works from any focus state:
+
+```json
+{
+  "ide_focus_commands": {
+    "Cursor": "Claude Code: Focus input"
+  }
+}
+```
+
+The title is whatever appears in that IDE's command palette, so this works for
+any AI extension rather than a specific one. Leave it unset to keep the
+keyboard shortcut.
+
+This is opt-in on purpose: the palette runs whatever it matches, so a title that
+does not exist in your IDE would fuzzy-match some other command and run it.
+
+On macOS, Samantha also verifies where focus actually landed before typing. If
+it is the code editor, the integrated terminal, or anything that is not a text
+input, she types nothing and falls back to the next injection method rather than
+pasting your words somewhere you did not intend.
 
 ### Injection Modes
 
