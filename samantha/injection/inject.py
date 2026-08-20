@@ -10,6 +10,9 @@ import samantha.audio.playback as playback
 from samantha.config import INJECTION_TIMEOUT, get_injection_mode, get_restore_focus
 from samantha.injection.clipboard import copy_to_clipboard, preserved_clipboard
 from samantha.injection.detection import (
+    FOCUS_EDITOR,
+    FOCUS_INPUT,
+    focused_input_state,
     activate_app,
     activate_terminal_with_ai,
     get_frontmost_app,
@@ -23,6 +26,40 @@ from samantha.injection.detection import (
 logger = logging.getLogger("samantha")
 
 PLATFORM = platform.system()
+
+
+def ensure_ai_input_focused(ide_name: str) -> bool:
+    """Guarantee focus is in a usable text input before anything is typed.
+
+    Previously this fired a focus shortcut and pasted regardless of the result,
+    and reported success whenever osascript exited 0 - which it does even when
+    the keystroke lands somewhere that ignores it. Dictation was therefore lost
+    silently while the log said the injection had succeeded.
+
+    The order matters: check FIRST. When the user has just typed in the AI
+    input, focus is already correct and sending the shortcut moves it away -
+    which is the common case and the one that broke.
+    """
+    state = focused_input_state(ide_name)
+    if state == FOCUS_INPUT:
+        return True
+
+    if state == FOCUS_EDITOR:
+        logger.debug("Focus is in the code editor; asking the IDE for its AI input")
+    if not focus_ide_ai_input(ide_name):
+        logger.error("Could not focus the AI input in %s", ide_name)
+        return False
+
+    state = focused_input_state(ide_name)
+    if state == FOCUS_INPUT:
+        return True
+
+    # Fail closed. Typing here would either vanish or land in the user's file.
+    logger.error(
+        "Refusing to type into %s: focus is %r, not a usable text input. "
+        "Click into the AI input and speak again.", ide_name, state,
+    )
+    return False
 
 
 def simulate_paste_and_enter() -> bool:
@@ -353,8 +390,7 @@ def _try_inject_extension(ide_name: str, text: str) -> bool:
         logger.error("Failed to copy to clipboard")
         return False
 
-    if not focus_ide_ai_input(ide_name):
-        logger.debug("Failed to focus %s AI input", ide_name)
+    if not ensure_ai_input_focused(ide_name):
         return False
 
     time.sleep(0.2)

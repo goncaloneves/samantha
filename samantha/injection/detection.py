@@ -86,6 +86,84 @@ def get_frontmost_app() -> str:
         return ""
 
 
+FOCUS_INPUT = "input"
+FOCUS_EDITOR = "editor"
+FOCUS_OTHER = "other"
+FOCUS_UNKNOWN = "unknown"
+
+TEXT_INPUT_ROLES = ("AXTextArea", "AXTextField", "AXComboBox")
+EDITOR_ROLE_DESCRIPTION = "editor"
+EDITOR_CLASS_MARKERS = ("monaco",)
+
+_FOCUS_PROBE_APPLESCRIPT = """
+tell application "System Events" to tell process "{app}"
+  set e to value of attribute "AXFocusedUIElement"
+  set r to ""
+  set d to ""
+  set c to ""
+  try
+    set r to (value of attribute "AXRole" of e) as text
+  end try
+  try
+    set d to (value of attribute "AXRoleDescription" of e) as text
+  end try
+  try
+    set c to (value of attribute "AXDOMClassList" of e) as text
+  end try
+  return r & "|" & d & "|" & c
+end tell
+"""
+
+
+def focused_input_state(app_name: str) -> str:
+    """Classify what currently has keyboard focus in ``app_name``.
+
+    The AI panel lives in a webview that Accessibility cannot enumerate, so the
+    input element can never be located and focused directly - but the element
+    that currently HAS focus is readable, and that is enough to refuse to type
+    into the wrong place.
+
+    A code editor and a chat box both report AXTextArea, so the role alone
+    would happily paste dictation into a source file. They are separated by
+    AXRoleDescription ("editor" vs "text entry area") and, as a second
+    independent signal, by Monaco's class marker - which is shared by VS Code,
+    Cursor and Windsurf, so this stays generic rather than fingerprinting one
+    extension. Anything unrecognised is reported as such and the caller must
+    fail closed.
+    """
+    if PLATFORM != "Darwin":
+        return FOCUS_UNKNOWN
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", _FOCUS_PROBE_APPLESCRIPT.format(app=app_name)],
+            capture_output=True, text=True, timeout=APP_ACTIVATION_TIMEOUT,
+        )
+    except Exception as e:
+        logger.debug("Focus probe failed: %s", e)
+        return FOCUS_UNKNOWN
+    if result.returncode != 0:
+        logger.debug("Focus probe returned %s: %s", result.returncode, result.stderr[:120])
+        return FOCUS_UNKNOWN
+
+    parts = result.stdout.strip().split("|")
+    if len(parts) != 3:
+        return FOCUS_UNKNOWN
+    role, role_description, class_list = (p.strip() for p in parts)
+
+    if not role:
+        # AXFocusedUIElement was missing or unreadable - typically the app is not
+        # frontmost. That is not the same as "focus is on something unusable", and
+        # conflating them hides the real reason in the refusal message.
+        return FOCUS_UNKNOWN
+    if role not in TEXT_INPUT_ROLES:
+        return FOCUS_OTHER
+    if role_description.lower() == EDITOR_ROLE_DESCRIPTION:
+        return FOCUS_EDITOR
+    if any(marker in class_list.lower() for marker in EDITOR_CLASS_MARKERS):
+        return FOCUS_EDITOR
+    return FOCUS_INPUT
+
+
 def activate_app(app_name: str) -> bool:
     """Activate/focus an application (cross-platform)."""
     try:
